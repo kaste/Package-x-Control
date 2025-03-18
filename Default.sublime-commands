@@ -1,0 +1,14 @@
+[
+    {
+        "caption": "Preferences: Package x Control Settings",
+        "command": "edit_settings",
+        "args": {
+            "base_file": "${packages}/Package x Control/Package x Control.sublime-settings",
+            "default": "{\n\t\"packages\": [\n\t\t$0\n\t],\n}\n"
+        }
+    },
+    {
+        "caption": "Package x Control: Dashboard",
+        "command": "pxc_dashboard"
+    }
+]

@@ -1,0 +1,179 @@
+%YAML 1.2
+---
+# See http://www.sublimetext.com/docs/syntax.html
+name: PXC-DASHBOARD
+file_extensions:
+  - pxc-dashboard
+scope: text.pxc-dashboard
+hidden: true
+variables:
+  indentation: '^ [\W]{3}'
+contexts:
+  main:
+    # ====================================================================
+    # == General Structure Elements ==
+    # ====================================================================
+
+    # Section headers (e.g., === INSTALLED PACKAGES)
+    - match: '^(===)\s+([A-Z ]+)$'
+      scope: meta.section.pxc-dashboard markup.heading.pxc-dashboard
+      captures:
+        1: punctuation.definition.heading.pxc-dashboard
+        2: keyword.entity.name.section.pxc-dashboard
+
+    # Additional package info lines (indented 5 spaces, starts with `)
+    # Used for 'new version available' etc.
+    - match: '^ {5}(`)\s*(.+?)\s{2,}(\S+)\s+/\s*(.+)$'
+      scope: meta.package-info.pxc-dashboard string.interpolated.pxc-dashboard
+      captures:
+        1: punctuation.definition.string.begin.pxc-dashboard
+        2: string.unquoted.package-info-description.pxc-dashboard
+        3: constant.other.package-info-version.pxc-dashboard
+        4: string.unquoted.package-info-date.pxc-dashboard
+
+    # ====================================================================
+    # == Disabled Package Rules (Lines starting with '   ;') ==
+    # == Order matters: Most specific patterns must come first! ==
+    # ====================================================================
+
+    # Disabled: Name tag/branch: Version / Date (+ optional checked out)
+    - match: '^ {3}(;)\s*([^ ].*?)\s{2,}(tag|branch)\s*:\s*(\S+)\s+/\s*(.+?)(?:\s+(\(checked out\)))?\s*$'
+      scope: comment.line.semicolon.disabled-package.pxc-dashboard meta.package.disabled.pxc-dashboard
+      captures:
+        1: punctuation.definition.comment.pxc-dashboard
+        2: entity.name.package.disabled.pxc-dashboard               # Package Name
+        3: disabled.string.unquoted.package-version-kind.disabled.pxc-dashboard      # tag | branch
+        4: disabled.constant.other.package-version.disabled.pxc-dashboard    # Version/Tag Name
+        5: disabled.string.unquoted.package-date.disabled.pxc-dashboard      # Date
+        6: disabled.meta.annotation.status.checked-out.pxc-dashboard string.unquoted.checked-out.pxc-dashboard # ( checked out )
+
+    # Disabled: Name Commit / Date (+ optional checked out)
+    - match: '^ {3}(;)\s*([^ ].*?)\s{2,}([0-9a-f]{7,})\s+/\s*(.+?)(?:\s+(\(checked out\)))?\s*$'
+      scope: comment.line.semicolon.disabled-package.pxc-dashboard meta.package.disabled.pxc-dashboard
+      captures:
+        1: punctuation.definition.comment.pxc-dashboard
+        2: entity.name.package.disabled.pxc-dashboard               # Package Name
+        3: disabled.constant.other.package-commit.disabled.pxc-dashboard     # Commit SHA
+        4: disabled.string.unquoted.package-date.disabled.pxc-dashboard      # Date
+        5: disabled.meta.annotation.status.checked-out.pxc-dashboard string.unquoted.checked-out.pxc-dashboard # ( checked out )
+
+    # Disabled: Name Version / Date (+ optional checked out) - Simplified Version match
+    - match: '^ {3}(;)\s*([^ ].*?)\s{2,}(\d[\d.]*\d)\s+/\s*(.+?)(?:\s+(\(checked out\)))?\s*$'
+      scope: comment.line.semicolon.disabled-package.pxc-dashboard meta.package.disabled.pxc-dashboard
+      captures:
+        1: punctuation.definition.comment.pxc-dashboard
+        2: entity.name.package.disabled.pxc-dashboard               # Package Name
+        3: disabled.constant.other.package-version.disabled.pxc-dashboard    # Version
+        4: disabled.string.unquoted.package-date.disabled.pxc-dashboard      # Date
+        5: disabled.meta.annotation.status.checked-out.pxc-dashboard string.unquoted.checked-out.pxc-dashboard # ( checked out )
+
+    # Disabled: Name Version (+ optional checked out) - Simplified Version match
+    - match: '^ {3}(;)\s*([^ ].*?)\s{2,}(\d[\d.]*\d)(?:\s+(\(checked out\)))?\s*$'
+      scope: comment.line.semicolon.disabled-package.pxc-dashboard meta.package.disabled.pxc-dashboard
+      captures:
+        1: punctuation.definition.comment.pxc-dashboard
+        2: entity.name.package.disabled.pxc-dashboard               # Package Name
+        3: constant.other.package-version.disabled.pxc-dashboard    # Version
+        4: meta.annotation.status.checked-out.pxc-dashboard string.unquoted.checked-out.pxc-dashboard # ( checked out )
+
+    # Disabled: Name / Date (+ optional checked out)
+    - match: '^ {3}(;)\s*([^ ].*?)\s{2,}/\s*(.+?)(?:\s+(\(checked out\)))?\s*$'
+      scope: comment.line.semicolon.disabled-package.pxc-dashboard meta.package.disabled.pxc-dashboard
+      captures:
+        1: punctuation.definition.comment.pxc-dashboard
+        2: entity.name.package.disabled.pxc-dashboard               # Package Name
+        3: disabled.string.unquoted.package-date.disabled.pxc-dashboard      # Date
+        4: disabled.meta.annotation.status.checked-out.pxc-dashboard string.unquoted.checked-out.pxc-dashboard # ( checked out )
+
+    # Disabled: Name ( checked out ) only
+    - match: '^ {3}(;)\s*([^ ].*?)\s{2,}(\(checked out\))\s*$'
+      scope: comment.line.semicolon.disabled-package.pxc-dashboard meta.package.disabled.pxc-dashboard
+      captures:
+        1: punctuation.definition.comment.pxc-dashboard
+        2: entity.name.package.disabled.pxc-dashboard               # Package Name
+        3: disabled.meta.annotation.status.checked-out.pxc-dashboard string.unquoted.checked-out.pxc-dashboard # ( checked out )
+
+    # Disabled: Fallback for name only or unrecognized format after comment marker
+    - match: '^ {3}(;)\s*([^ ].*?)?\s*$' # Match name lazily
+      scope: comment.line.semicolon.disabled-package.pxc-dashboard
+      captures:
+        1: punctuation.definition.comment.pxc-dashboard
+        2: entity.name.package.disabled.pxc-dashboard  # Try to capture as name
+
+    # ====================================================================
+    # == Active Package Rules (Lines starting with '    ') ==
+    # == Order matters: Most specific patterns must come first! ==
+    # ====================================================================
+
+    # Active: Name tag/branch: Version / Date (+ optional checked out)
+    - match: '({{indentation}})([^`\s].*?)\s{2,}(tag|branch)\s*:\s*(\S+)\s+/\s*(.+?)(?:\s+(\(checked out\)))?\s*$'
+      scope: meta.package.pxc-dashboard
+      captures:
+        1: constant.other.package-marker.pxc-dashboard              # Indentation Marker
+        2: entity.name.package.pxc-dashboard                        # Package Name
+        3: string.unquoted.package-version-kind.pxc-dashboard       # tag | branch
+        4: constant.other.package-version.pxc-dashboard             # Version/Tag Name
+        5: string.unquoted.package-date.pxc-dashboard               # Date
+        6: meta.annotation.status.checked-out.pxc-dashboard string.unquoted.checked-out.pxc-dashboard # ( checked out )
+
+    # Active: Name Commit / Date (+ optional checked out)
+    - match: '({{indentation}})([^`\s].*?)\s{2,}([0-9a-f]{7,})\s+/\s*(.+?)(?:\s+(\(checked out\)))?\s*$'
+      scope: meta.package.pxc-dashboard
+      captures:
+        1: constant.other.package-marker.pxc-dashboard              # Indentation Marker
+        2: entity.name.package.pxc-dashboard                        # Package Name
+        3: constant.other.package-commit.pxc-dashboard              # Commit SHA
+        4: string.unquoted.package-date.pxc-dashboard               # Date
+        5: meta.annotation.status.checked-out.pxc-dashboard string.unquoted.checked-out.pxc-dashboard # ( checked out )
+
+    # Active: Name Version / Date (+ optional checked out) - Simplified Version match
+    - match: '({{indentation}})([^`\s].*?)\s{2,}(\d[\d.]*\d)\s+/\s*(.+?)(?:\s+(\(checked out\)))?\s*$'
+      scope: meta.package.pxc-dashboard
+      captures:
+        1: constant.other.package-marker.pxc-dashboard              # Indentation Marker
+        2: entity.name.package.pxc-dashboard                        # Package Name
+        3: constant.other.package-version.pxc-dashboard             # Version
+        4: string.unquoted.package-date.pxc-dashboard               # Date
+        5: meta.annotation.status.checked-out.pxc-dashboard string.unquoted.checked-out.pxc-dashboard # ( checked out )
+
+    # Active: Name Version (+ optional checked out) - Simplified Version match
+    - match: '({{indentation}})([^`\s].*?)\s{2,}(\d[\d.]*\d)(?:\s+(\(checked out\)))?\s*$'
+      scope: meta.package.pxc-dashboard
+      captures:
+        1: constant.other.package-marker.pxc-dashboard              # Indentation Marker
+        2: entity.name.package.pxc-dashboard                        # Package Name
+        3: constant.other.package-version.pxc-dashboard             # Version
+        4: meta.annotation.status.checked-out.pxc-dashboard string.unquoted.checked-out.pxc-dashboard # ( checked out )
+
+    # Active: Name / Date (+ optional checked out)
+    - match: '({{indentation}})([^`\s].*?)\s{2,}/\s*(.+?)(?:\s+(\(checked out\)))?\s*$'
+      scope: meta.package.pxc-dashboard
+      captures:
+        1: constant.other.package-marker.pxc-dashboard              # Indentation Marker
+        2: entity.name.package.pxc-dashboard                        # Package Name
+        3: string.unquoted.package-date.pxc-dashboard               # Date
+        4: meta.annotation.status.checked-out.pxc-dashboard string.unquoted.checked-out.pxc-dashboard # ( checked out )
+
+    # Active: Name ( checked out ) only
+    - match: '({{indentation}})([^`\s].*?)\s{2,}(\(checked out\))\s*$'
+      scope: meta.package.pxc-dashboard
+      captures:
+        1: constant.other.package-marker.pxc-dashboard              # Indentation Marker
+        2: entity.name.package.pxc-dashboard                        # Package Name
+        3: meta.annotation.status.checked-out.pxc-dashboard string.unquoted.checked-out.pxc-dashboard # ( checked out )
+
+    # Active: Fallback for name only or unrecognized format
+    - match: '({{indentation}})([^`\s].*?)?\s*$' # Match name lazily
+      scope: meta.package.pxc-dashboard
+      captures:
+        1: constant.other.package-marker.pxc-dashboard              # Indentation Marker
+        2: entity.name.package.pxc-dashboard # Try to capture as name
+
+    # ====================================================================
+    # == General Comment Lines (Starting with ';') ==
+    # ====================================================================
+    - match: '^(;)(.*)$'
+      scope: comment.line.semicolon.pxc-dashboard
+      captures:
+        1: punctuation.definition.comment.pxc-dashboard
+        2: comment.line.semicolon.content.pxc-dashboard

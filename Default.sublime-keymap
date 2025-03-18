@@ -1,0 +1,38 @@
+[
+    {
+        "keys": ["."],
+        "command": "pxc_next_package",
+        "context": [
+            { "key": "setting.pxc_dashboard" },
+        ]
+
+    },
+    {
+        "keys": [","],
+        "command": "pxc_previous_package",
+        "context": [
+            { "key": "setting.pxc_dashboard" },
+        ]
+    },
+    {
+        "keys": [";"],
+        "command": "pxc_toggle_disable_package",
+        "context": [
+            { "key": "setting.pxc_dashboard" },
+        ]
+    },
+    {
+        "keys": ["o"],
+        "command": "pxc_open_packagecontrol_io",
+        "context": [
+            { "key": "setting.pxc_dashboard" },
+        ]
+    },
+    {
+        "keys": ["u"],
+        "command": "pxc_update_package",
+        "context": [
+            { "key": "setting.pxc_dashboard" },
+        ]
+    }
+]

@@ -1,0 +1,38 @@
+
+
+=== INSTALLED PACKAGES
+
+    timbrel/GitSavvy             tag: 4.25.7   / Feb 24 2025
+     ` new version available          4.26.0   / Mar 3 2025
+
+    SublimeLinter/SublimeLinter  tag: 5.0.1    / Aug 12 2024
+
+    kaste/aloof                  branch: master  / Sep 12 2022
+     ` update available             5fd8e3de     / Mar 3 2025
+
+    kaste/Outline                5fd8e3de      / Sep 12 2022
+
+   ;SublimeLinter/SublimeLinter  (checked out)
+
+
+=== PACKAGES BY PACKAGE CONTROL
+
+    Package Control             / Jan 1 2024
+
+
+=== UNMANAGED PACKAGES
+
+   <Find-Addon        5fd8e3de  / Jan 1 2024
+    StatusRulers         1.2.3  / Jan 1 2024
+    PyHi
+
+
+; Paste git URL's or URL's from packagecontrol.io or Github et.al. to install.
+; Comment a line to disable a package.
+;                                      [u]  update package
+; [ctrl+backspace]  delete package     [U]  unpack package
+
+; Fetching package data from packagecontrol .io
+; 5104 packages in total.
+; Prepared packages in 14.50 seconds.
+; [18.03.2025 13:30]

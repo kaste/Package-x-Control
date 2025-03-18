@@ -1,0 +1,10 @@
+.DS_Store
+.cache
+.coverage
+coverage.xml
+*.pyc
+*.sublime-project
+*.sublime-workspace
+.mypy_cache/
+
+Package Control.sublime-settings

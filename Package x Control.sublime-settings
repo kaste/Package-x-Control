@@ -1,0 +1,91 @@
+{
+    "packages": [
+        // "packages" holds a list of strings or mappings.
+        // If a string, the string is the URL to a git repository.
+        // Generally something you could set as a remote in a git repository.
+        "https://github.com/example/example-plugin.git",
+
+        // The url can be a short name, in which case we assume it is a
+        // github repository:
+        "example/example-plugin",
+        // which will expand to "https://github.com/example/example-plugin.git".
+        // We deduce the name of the package from the last part of the url.
+        // In this case, the name of the package will be "GitSavvy".
+
+        // If the name of the package is not the last part of the url,
+        // the expanded dictionary form must be used:
+        {
+            // A name can be specified, if the last part of the "url"
+            // would not be correct.  This is typical when the name
+            // contains a space, but the github repo name does not.
+            "name":  "My Example Plugin",
+
+            // REQUIRED.
+            // The url to a git repository.  Like before, a short name
+            // will be expanded to a github url.
+            "url": "example/example-plugin",
+
+            // The "refs" field denotes which remote references we fetch.
+            // "tags/*" is the default and the smart/hybrid mode.  See below.
+            // We also support prefixed tags, e.g. "tags/st3-*" will match all
+            // tags that start with "st3-", likewise "tags/4070-*" will match all
+            // tags that start with "4070-".
+            //
+            // "refs" can also point to a specific version like "tags/2.1.9" if a
+            // user wants to pin a version, e.g. to downgrade and freeze the package.
+            // "refs" can also point to branches, e.g. "heads/master", or e.g. pull
+            // requests "pull/1909", in which case we follow updates on these tips.
+            // In all other cases, we assume "refs" is literally a commit sha we
+            // use as the final, frozen version. Long and short hashes are allowed.
+            // That means, every value for "refs" without a slash is considered a
+            // commit hash.
+            //
+            // For the default, "tags/*" we will encode that we fetch all tags,
+            // strip any prefixes of the above forms, and then parse the remaining
+            // part as the version string. Usually the newest version wins.
+            // E.g. a version "st3-2.9.0", "4070-2.9.0", and "2.9.0" all mean the
+            // same thing.  This is so that package authors don't have to agree
+            // on one single convention.  However, if a prefix is used, we also
+            // interpret that as meaningful. I.e. a "4070-" prefix means that
+            // Sublime's build must be >= "4070" to support that version.  A "st3-"
+            // prefix means, in contrast, that this is the *only* version that runs
+            // on the old Sublime Text 3, i.e. the build number is < "4000".
+            // The prefix "st4070-" means that this is a frozen version for build
+            // "4070".  In practice, we therefore have packages that use semantic
+            // versions "2.0.0", "2.1.0" and so forth plus tag some special
+            // versions as last candidates for a specific build, e.g. "st4035-2.0.0".
+            // If we see that, we know "2.1.0" has a special breaking change in that
+            // it requires a different host.
+            // And we have another convention, where package authors use
+            // "4070-2.0.0", "4092-2.1.0" and so forth.  They usually have all current
+            // tags prefixed and always specify which build is required.
+            //
+            "refs": "tags/*",
+
+            // not implemented in the MVP
+            // With unpacked, a user can tell to "unpack" the package.  This is
+            // done usually to hack on it.  Hence the default is "false".
+            "unpacked": false,
+
+            // not implemented in the MVP
+            // "dependencies" is a nested structure of the same kind as the parent
+            // structure and defines packages that should also be installed when
+            // the main/parent package is installed.  Of course, a user could just
+            // put them in the top-level, but then, keeping track of them when
+            // disabling or removing the main package becomes a hassle.
+            // Although it is the same "kind", only the primary keys "name", "url",
+            // and "refs" are allowed here. Esp. no nested dependencies are allowed.
+            "dependencies": ["kast/output-panel"],
+
+            // not implemented in the MVP
+            // "bind" defines key-bindings that are installed with the package.
+            // Of course, users could add these bindings however they want, but
+            // keeping some of them here, has the advantage of not too many orphaned
+            // bindings in the global settings.  Typically one forgets to remove
+            // such key-bindings when disabling or uninstalling packages.
+            "bind": [
+                { "key": ["ctrl+a"], "command": "status" }
+            ]
+        },
+    ],
+}
