@@ -267,35 +267,6 @@ def describe_current_commit(git: GitCallable) -> Version | None:
     return Version(None, commit_hash)
 
 
-def status_for_package(config: PackageConfiguration, root: str, Git: type[GitCallable]):
-    git = ensure_repository(config, root, Git)
-    version = describe_current_commit(git)
-    return {
-        "name": remove_lr(config["url"], "https://github.com/", ".git"),
-        **(version_info(version, git) if version else {})
-    }
-
-
-def version_info(version: Version, git: GitCallable) -> dict:
-    return {
-        "version": simplify_version(version),
-        "date": human_date(get_author_date(version.sha, git))
-    }
-
-
-def simplify_version(version: Version) -> tuple[str, str]:
-    refname, sha = version
-    if refname is None:
-        return ("commit", sha[:8])
-    elif refname.startswith("refs/tags/"):
-        return ("tag", remove_prefix(refname, "refs/tags/"))
-    elif refname.startswith("refs/heads/"):
-        return ("branch", remove_prefix(refname, "refs/heads/"))
-    else:
-        topic, detail = remove_prefix(refname, "refs/").split("/", 1)
-        return (topic, detail)
-
-
 def get_commit_date(sha: str, git: GitCallable) -> int:
     """Get commit timestamp as Unix epoch seconds."""
     try:
