@@ -266,83 +266,17 @@ class State(TypedDict, total=False):
     registered_packages: PackageDb
 
 
-# Function to convert string dates to timestamps for sample data
-def date_to_ts(date_str: str) -> float:
-    dt = datetime.strptime(date_str, "%b %d %Y").replace(tzinfo=timezone.utc)
-    return dt.timestamp()
-
-
 def datetime_to_ts(string) -> float:
     dt = datetime.strptime(string, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
     return dt.timestamp()
 
 
-# --- Sample State with refactored data structure ---
 state: State = {
-    "installed_packages": [
-        # {
-        #     "name": "timbrel/GitSavvy",
-        #     "version": VersionDescription("tag", "4.25.7", date_to_ts("Feb 24 2025")),
-        #     "update_available": VersionDescription("tag", "4.26.0", date_to_ts("Mar 3 2025")),
-        #     "checked_out": False,
-        # },
-        # {
-        #     # "name": "https://github.com/SublimeLinter/SublimeLinter",
-        #     "name": "SublimeLinter/SublimeLinter",
-        #     "version": VersionDescription("tag", "5.0.1", date_to_ts("Aug 12 2024")),
-        #     "checked_out": False,
-        # },
-        # {
-        #     "name": "kaste/aloof",
-        #     "version": VersionDescription("branch", "master", date_to_ts("Sep 12 2022")),
-        #     "update_available": VersionDescription("commit", "5fd8e3de", date_to_ts("Mar 3 2025")),
-        #     "checked_out": False,
-        # },
-        # {
-        #     "name": "kaste/Outline",
-        #     "version": VersionDescription("commit", "5fd8e3de", date_to_ts("Sep 12 2022")),
-        #     "checked_out": False,
-        # },
-        # {
-        #     "name": "ablyx/SublimeLinter-addon-fancy-goto",
-        #     # "name": "https://bitbucket.com/ablyx/SublimeLinter-addon-fancy-goto",
-        #     "version": None,  # No version info shown when checked out
-        #     "checked_out": True,
-        # }
-    ],
-    "package_controlled_packages": [
-        # {
-        #     "name": "Package Control",
-        #     "version": VersionDescription(kind="", specifier="", date=date_to_ts("Jan 1 2024")),
-        #     "checked_out": False,
-        # },
-    ],
-    "unmanaged_packages": [
-        # {
-        #     "name": "Find-Addon",
-        #     "version": VersionDescription("commit", "5fd8e3de", date_to_ts("Jan 1 2024")),
-        #     "checked_out": False,
-        # },
-        # {
-        #     "name": "StatusRulers",
-        #     "version": VersionDescription("tag", "1.2.3", date_to_ts("Jan 1 2024")),
-        #     "checked_out": False,
-        # },
-        # {
-        #     "name": "PyHi",
-        #     "version": None,
-        #     "checked_out": False,
-        # }
-    ],
-    "disabled_packages": [
-        # "SublimeLinter/SublimeLinter",
-    ],
-    "status_messages": deque([
-        # "Fetching package data from packagecontrol.io",
-        # "5104 packages in total.",
-        # "Prepared packages in 14.50 seconds.",
-        # f"[{datetime.now():%d.%m.%Y %H:%M}]"  # Dynamic timestamp
-    ], 10),
+    "installed_packages": [],
+    "package_controlled_packages": [],
+    "unmanaged_packages": [],
+    "disabled_packages": [],
+    "status_messages": deque([], 10),
     "registered_packages": {}
 }
 
