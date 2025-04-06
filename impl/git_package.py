@@ -217,10 +217,11 @@ def best_version_for(refs: str, st_build: int, git: GitCallable) -> Version | No
             return Version(f"refs/tags/{tag[0]}", tag[1])
     elif "/" in refs:
         # E.g. "heads/master", "pull/1909", "tags/2.1.9"
-        items = fetch_remote_refs(f"refs/{refs}", git)
-        # these names should be unique but we don't check it for now
-        if items:
-            return Version(*items.popitem())
+        # In case of tags, we want the dereferences sha (if there is one)
+        # so we add "*".  These names should be unique otherwise.
+        for refname, sha in fetch_remote_refs(f"refs/{refs}*", git).items():
+            if remove_prefix(refname, "refs/") == refs:
+                return Version(refname, sha)
     else:
         # Everything else is treated as if a commit hash is wanted.
         # Basically: freeze the checked out version
