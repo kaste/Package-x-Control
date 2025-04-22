@@ -34,6 +34,11 @@ def it_runs_on_worker() -> bool:
     return threading.current_thread().name == WORKER_THREAD_NAME
 
 
+def assert_it_runs_on_worker() -> None:
+    if not it_runs_on_worker():
+        raise RuntimeError("MUST run on worker")
+
+
 def on_worker(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> None:
     if it_runs_on_worker():
         fn(*args, **kwargs)

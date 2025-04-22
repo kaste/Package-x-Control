@@ -10,7 +10,7 @@ import traceback
 from typing import Callable, TypeVar, Generic, Optional, Any
 from typing_extensions import ParamSpec, TypeAlias
 
-from .runtime import ensure_on_worker, it_runs_on_worker, run_on_worker
+from .runtime import assert_it_runs_on_worker, ensure_on_worker, run_on_worker
 import sublime
 
 
@@ -51,10 +51,10 @@ class TopicTask(Generic[T]):
         return f"TopicTask(topic={self.topic}, name={self.name}, status={self.status})"
 
 
-queue: list[TopicTask] = []
-running_topics = set()
 KEEP_ALIVE_TIME = 10.0
 MAX_WORKERS = 8
+queue: list[TopicTask] = []
+running_topics = set()
 running_workers: list[Worker] = []
 
 
@@ -69,9 +69,9 @@ def add(topic: str, fn: Callable[[], T]) -> Future[T]:
 
 
 def _add(task: TopicTask):
-    assert it_runs_on_worker()
-
     global queue, running_topics
+    assert_it_runs_on_worker()
+
     if task.topic not in running_topics and (worker := get_idle_worker()):
         schedule(worker, task)
     else:
@@ -79,9 +79,9 @@ def _add(task: TopicTask):
 
 
 def _tick(w, task):
-    assert it_runs_on_worker()
-
     global queue, running_topics
+    assert_it_runs_on_worker()
+
     running_topics.discard(task.topic)
     for task in queue:
         if task.topic not in running_topics:
@@ -93,16 +93,16 @@ def _tick(w, task):
 
 
 def _cancel_topic(topic: str):
-    assert it_runs_on_worker()
-
     global queue
+    assert_it_runs_on_worker()
+
     queue = [task for task in queue if task.topic != topic]
 
 
 def _did_shutdown(w):
-    assert it_runs_on_worker()
-
     global running_workers
+    assert_it_runs_on_worker()
+
     try:
         running_workers.remove(w)
     except ValueError:
