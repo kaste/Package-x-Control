@@ -168,6 +168,7 @@ class pxc_update_package(sublime_plugin.TextCommand):
             else:
                 view.show_popup("[u] only implemented for INSTALLED PACKAGES")
                 return
+
             for entry in entries:
                 if entry["name"] == name:
                     package_info = get_update_info(entry)
