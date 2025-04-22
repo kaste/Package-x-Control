@@ -54,6 +54,10 @@ def boot():
     # Do we actually need to save the settings?
     # sublime.save_settings(PACKAGE_CONTROL_PREFERENCES)
 
+    # Delay monkey-patching or it won't work.
+    # Must be something with PC doing its own boot delayed.
+    sublime.set_timeout_async(
+        lambda: ensure_package_managers_http_get_is_patched(), 2000)
     # ensure_package_managers_http_get_is_patched()
 
     # Ensure local Package Control Preferences exist
@@ -79,18 +83,21 @@ def unboot():
 def ensure_package_managers_http_get_is_patched():
     from package_control import package_manager
 
+    try:
+        original_http_get = package_manager.http_get.__wrapped__
+    except AttributeError:
+        original_http_get = package_manager.http_get
+
     def patched_http_get(url, settings, error_message="", prefer_cached=False):
-        print("patched_http_get", url)
         if url.startswith("file:///"):
             with open(urllib.parse.unquote(url[8:]), "rb") as f:
                 return f.read()
 
         return original_http_get(url, settings, error_message, prefer_cached)
 
-    if package_manager.http_get.__name__ == "http_get":
-        print(
-            "Package Control X: patch package_control.package_manager.http_get "
-            "to support file URL's."
-        )
-        original_http_get = package_manager.http_get
-        package_manager.http_get = patched_http_get
+    patched_http_get.__wrapped__ = original_http_get  # type: ignore[attr-defined]
+    print(
+        "Package Control X: patch package_control.package_manager.http_get "
+        "to support file URL's."
+    )
+    package_manager.http_get = patched_http_get
