@@ -3,9 +3,7 @@ from concurrent.futures import Future
 from contextlib import contextmanager
 from functools import partial
 import os
-import re
 import shutil
-import urllib.parse
 
 import sublime
 
@@ -28,9 +26,7 @@ from .repository import (
     recreate_repository,
     remove_package_from_repository
 )
-from .pc_repository import reverse_lookup
 from .runtime import gather
-from .utils import drop_falsy, remove_suffix
 from . import worker
 
 
@@ -106,65 +102,6 @@ def install_package(entry: PackageConfiguration):
 def install_proprietary_package(name: str):
     with ActivityIndicator('Installing...') as progress:
         run_pc_install_task([name], progress, unattended=False)
-
-
-def install_package_from_name(name: str):
-    package_entry: PackageConfiguration
-    url = None
-    if name.startswith("https://packagecontrol.io/packages/"):
-        name = urllib.parse.unquote(name[35:])
-    elif url := parse_url_from_user_input(name):
-        name = remove_suffix(url.rsplit("/", 1)[1], ".git")
-
-    if package_control_entry := reverse_lookup(name):
-        if "git_url" in package_control_entry:
-            package_entry = {
-                "name": package_control_entry["name"],
-                "url": url or package_control_entry["git_url"],
-                "refs": package_control_entry["refs"],
-                "unpacked": False
-            }
-            install_package(package_entry)
-        else:
-            install_proprietary_package(package_control_entry["name"])
-    elif url:
-        package_entry = {
-            "name": name,
-            "url": url,
-            "refs": "tags/*",
-            "unpacked": False
-        }
-        install_package(package_entry)
-
-
-HUBS = [
-    "https://github.com/",
-    "https://gitlab.com/",
-    "https://bitbucket.org/"
-]
-
-
-def parse_url_from_user_input(clip_content):
-    # type: (str) -> str
-    if not clip_content:
-        return ""
-
-    if (
-        clip_content.endswith(".git")
-        and re.match(r"^(https?|git)://|git@", clip_content)
-    ):
-        return clip_content
-
-    for hub in HUBS:
-        if clip_content.startswith(hub):
-            path = clip_content[len(hub):]
-            try:
-                owner, name = drop_falsy(path.split("/")[:2])
-            except ValueError:
-                return ""
-            else:
-                return "{}{}/{}.git".format(hub, owner, name)
-    return ""
 
 
 def remove_package_by_name(name: str):

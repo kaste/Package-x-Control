@@ -7,6 +7,7 @@ from itertools import chain
 import os
 from textwrap import wrap
 import urllib.parse
+import re
 from webbrowser import open as open_in_browser
 
 from typing import Callable, Iterable, Literal, NamedTuple, TypedDict, Optional, Sequence
@@ -31,11 +32,13 @@ from .git_package import (
 )
 from .glue_code import (
     disable_packages_by_name, enable_packages_by_name, get_update_info,
-    install_package, install_package_from_name
+    install_package, install_proprietary_package
 )
-from .pc_repository import fetch_packages, PackageDb
+from .pc_repository import fetch_packages, reverse_lookup, PackageDb
 from .runtime import ensure_on_ui
-from .utils import drop_falsy, format_items, human_date, remove_prefix
+from .utils import (
+    drop_falsy, format_items, human_date, remove_prefix, remove_suffix
+)
 from . import worker
 
 
@@ -195,7 +198,81 @@ class pxc_install_package(sublime_plugin.TextCommand):
                 view.show_popup("Nothing in the clipboard")
                 return
 
-        worker.add_task("package_control_fx", install_package_from_name, name)
+        package_entry: PackageConfiguration
+        url = None
+
+        def install_package_fx_(entry: PackageConfiguration):
+            install_package(entry)
+            log_fx_(entry['name'])
+
+        def install_proprietary_package_fx_(name: str):
+            install_proprietary_package(name)
+            log_fx_(name)
+
+        def log_fx_(name: str):
+            message = f"Installed {name}."
+            state["status_messages"].append(message)
+            refresh(view)
+
+        if name.startswith("https://packagecontrol.io/packages/"):
+            name = urllib.parse.unquote(name[35:])
+        elif url := parse_url_from_user_input(name):
+            name = remove_suffix(url.rsplit("/", 1)[1], ".git")
+
+        if package_control_entry := reverse_lookup(name):
+            if "git_url" in package_control_entry:
+                package_entry = {
+                    "name": package_control_entry["name"],
+                    "url": url or package_control_entry["git_url"],
+                    "refs": package_control_entry["refs"],
+                    "unpacked": False
+                }
+                worker.add_task("package_control_fx", install_package_fx_, package_entry)
+            else:
+                worker.add_task(
+                    "package_control_fx",
+                    install_proprietary_package_fx_,
+                    package_control_entry["name"]
+                )
+        elif url:
+            package_entry = {
+                "name": name,
+                "url": url,
+                "refs": "tags/*",
+                "unpacked": False
+            }
+            worker.add_task("package_control_fx", install_package_fx_, package_entry)
+        else:
+            truncated_name = (name[:67] + "...") if len(name) > 70 else name
+            view.show_popup(
+                f"'{truncated_name}' neither looks like a git url "
+                "nor is it a name found in the package registry."
+            )
+
+
+HUBS = ["https://github.com/", "https://gitlab.com/", "https://bitbucket.org/"]
+
+
+def parse_url_from_user_input(clip_content: str) -> str:
+    if not clip_content:
+        return ""
+
+    if (
+        clip_content.endswith(".git")
+        and re.match(r"^(https?|git)://|git@", clip_content)
+    ):
+        return clip_content
+
+    for hub in HUBS:
+        if clip_content.startswith(hub):
+            path = clip_content[len(hub):]
+            try:
+                owner, name = drop_falsy(path.split("/")[:2])
+            except ValueError:
+                return ""
+            else:
+                return "{}{}/{}.git".format(hub, owner, name)
+    return ""
 
 
 class pxc_update_package(sublime_plugin.TextCommand):
