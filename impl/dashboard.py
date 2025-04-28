@@ -10,7 +10,10 @@ import urllib.parse
 import re
 from webbrowser import open as open_in_browser
 
-from typing import Callable, Iterable, Literal, NamedTuple, TypedDict, Optional, Sequence
+from typing import (
+    Callable, Iterable, Iterator, Literal, NamedTuple, TypedDict,
+    Optional, Sequence
+)
 from typing_extensions import TypeAlias
 
 import sublime
@@ -77,16 +80,6 @@ class State(TypedDict, total=False):
     registered_packages: PackageDb
 
 
-state: State = {
-    "installed_packages": [],
-    "package_controlled_packages": [],
-    "unmanaged_packages": [],
-    "disabled_packages": [],
-    "status_messages": deque([], 10),
-    "registered_packages": {}
-}
-
-
 # Configuration object for dashboard formatting
 class Config:
     # Formatting constants
@@ -119,6 +112,42 @@ RESERVED_PACKAGES = {
     'Binary', 'Default', 'Text', 'User', 'Package Control',
     'Package x Control',
 }
+dashboard_views: set[sublime.View] = set()
+state: State = {
+    "installed_packages": [],
+    "package_controlled_packages": [],
+    "unmanaged_packages": [],
+    "disabled_packages": [],
+    "status_messages": deque([], 10),
+    "registered_packages": {}
+}
+
+
+@ensure_on_ui
+def set_state(partial_state: State):
+    state.update(partial_state)
+    render_visible_dashboards()
+
+
+def render_visible_dashboards():
+    for view in visible_views():
+        if view_is_our_dashboard(view):
+            render(view, state)
+
+
+def visible_views(window: sublime.Window = None) -> Iterator[sublime.View]:
+    yield from (
+        sheets_view
+        for window_ in ([window] if window else sublime.windows())
+        for group_id in range(window_.num_groups())
+        for sheet in window_.selected_sheets_in_group(group_id)
+        if (sheets_view := sheet.view())
+    )
+
+
+def view_is_our_dashboard(view: sublime.View) -> bool:
+    # Check settings and also if the view is valid and not closed
+    return bool(view.settings().get("pxc_dashboard"))
 
 
 class pxc_dashboard(sublime_plugin.WindowCommand):
@@ -126,7 +155,7 @@ class pxc_dashboard(sublime_plugin.WindowCommand):
         window = self.window
         view = find_or_create_dashboard(window)
         window.focus_view(view)
-        refresh(view)
+        refresh()
 
 
 def find_or_create_dashboard(window) -> sublime.View:
@@ -149,6 +178,7 @@ def find_or_create_dashboard(window) -> sublime.View:
         # "gutter": False,
         # "rulers": [],
     })
+    dashboard_views.add(view)
     return view
 
 
@@ -167,20 +197,16 @@ def prepare_view_settings(view: sublime.View, options: dict[str, object]) -> Non
             settings.set(k, v)
 
 
-def view_is_our_dashboard(view: sublime.View) -> bool:
-    # Check settings and also if the view is valid and not closed
-    return bool(view.is_valid() and view.settings().get("pxc_dashboard"))
-
-
 class pxc_listener(sublime_plugin.EventListener):
     def on_activated(self, view):
         # Refresh only if it's our dashboard and maybe needs updating
         if view_is_our_dashboard(view):
-            refresh(view)
+            # Ensure `dashboard_views` is kept up-to-date, e.g. after reloads.
+            dashboard_views.add(view)
+            refresh()
 
     def on_pre_close(self, view):
-        # Optional: Clean up if needed when the dashboard view is closed
-        pass
+        dashboard_views.discard(view)
 
     def on_text_command(self, view, command_name, args):
         if command_name == "toggle_comment" and view_is_our_dashboard(view):
@@ -212,7 +238,7 @@ class pxc_install_package(sublime_plugin.TextCommand):
         def log_fx_(name: str):
             message = f"Installed {name}."
             state["status_messages"].append(message)
-            refresh(view)
+            refresh()
 
         if name.startswith("https://packagecontrol.io/packages/"):
             name = urllib.parse.unquote(name[35:])
@@ -283,7 +309,7 @@ class pxc_update_package(sublime_plugin.TextCommand):
             install_package(entry)
             message = f"Updated {entry['name']}."
             state["status_messages"].append(message)
-            refresh(view)
+            refresh()
 
         config_data = get_configuration()
         entries = process_config(config_data)
@@ -329,7 +355,7 @@ class pxc_toggle_disable_package(sublime_plugin.TextCommand):
             En = "En" if enable else "Dis"
             message = f"{En}abled {format_items(package_names)}."
             state["status_messages"].append(message)
-            refresh(view)
+            refresh()
 
         if to_enable:
             worker.add_task("package_control_fx", fx_, True, to_enable)
@@ -749,15 +775,9 @@ def calculate_terse_section_widths(
 # --- State Refresher
 
 
-def refresh(view: sublime.View) -> None:
+def refresh() -> None:
     """Fetches the latest state (if necessary) and renders the view."""
     global state
-
-    @ensure_on_ui
-    def set_state(partial_state: State):
-        state.update(partial_state)
-        render(view, state)
-
     fast_state(state, set_state)
     worker.add_task("fetch_packages", fetch_registered_packages, state, set_state)
     worker.add_task("refresh_disabled_packages", refresh_disabled_packages, state, set_state)
