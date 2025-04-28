@@ -194,12 +194,18 @@ class pxc_toggle_disable_package(sublime_plugin.TextCommand):
             else:
                 to_disable.append(package)
 
-        if to_enable:
-            enable_packages_by_name(to_enable)
-        if to_disable:
-            disable_packages_by_name(to_disable)
-        if to_enable or to_disable:
+        def fx_(enable: bool, package_names: list[str]):
+            fn = enable_packages_by_name if enable else disable_packages_by_name
+            fn(package_names)
+            En = "En" if enable else "Dis"
+            message = f"{En}abled {format_items(package_names)}."
+            state["status_messages"].append(message)
             refresh(view)
+
+        if to_enable:
+            worker.add_task("package_control_fx", fx_, True, to_enable)
+        if to_disable:
+            worker.add_task("package_control_fx", fx_, False, to_disable)
 
 
 class pxc_open_packagecontrol_io(sublime_plugin.TextCommand):
