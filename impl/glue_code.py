@@ -103,6 +103,11 @@ def install_package(entry: PackageConfiguration):
             call_the_pc([package["name"]], progress, unattended=False)
 
 
+def install_proprietary_package(name: str):
+    with ActivityIndicator('Installing...') as progress:
+        run_pc_install_task([name], progress, unattended=False)
+
+
 def install_package_from_name(name: str):
     package_entry: PackageConfiguration
     url = None
@@ -121,10 +126,7 @@ def install_package_from_name(name: str):
             }
             install_package(package_entry)
         else:
-            # delegate to Package Control to install proprietary package
-            sublime.run_command("install_packages", {
-                "packages": [package_control_entry["name"]]
-            })
+            install_proprietary_package(package_control_entry["name"])
     elif url:
         package_entry = {
             "name": name,
