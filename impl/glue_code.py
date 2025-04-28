@@ -137,35 +137,6 @@ def install_package_from_name(name: str):
         install_package(package_entry)
 
 
-def disable_packages_by_name(names: list[str]) -> None:
-    unique_packages = set(names)
-    disabled = PackageDisabler.disable_packages({PackageDisabler.DISABLE: unique_packages})
-
-    num_packages = len(unique_packages)
-    num_disabled = len(disabled)
-    if num_packages == num_disabled:
-        if num_packages == 1:
-            message = 'Package %s successfully disabled.' % names[0]
-        else:
-            message = '%d packages have been disabled.' % num_disabled
-    else:
-        message = '%d of %d packages have been disabled.' % (num_disabled, num_packages)
-
-    sublime.status_message(message)
-
-
-def enable_packages_by_name(names: list[str]) -> None:
-    unique_packages = set(names)
-    PackageDisabler.reenable_packages({PackageDisabler.ENABLE: unique_packages})
-
-    if len(unique_packages) == 1:
-        message = 'Package %s successfully enabled.' % names[0]
-    else:
-        message = '%d packages have been enabled.' % len(unique_packages)
-
-    sublime.status_message(message)
-
-
 HUBS = [
     "https://github.com/",
     "https://gitlab.com/",
@@ -202,6 +173,37 @@ def remove_package_by_name(name: str):
         remove_package_from_repository(name, PACKAGES_REPOSITORY)
         remove_package_from_package_control_data(name)
         run_pc_remove_task([name], progress)
+
+
+def disable_packages_by_name(names: list[str]) -> None:
+    with ActivityIndicator():
+        unique_packages = set(names)
+        disabled = PackageDisabler.disable_packages({PackageDisabler.DISABLE: unique_packages})
+
+        num_packages = len(unique_packages)
+        num_disabled = len(disabled)
+        if num_packages == num_disabled:
+            if num_packages == 1:
+                message = 'Package %s successfully disabled.' % names[0]
+            else:
+                message = '%d packages have been disabled.' % num_disabled
+        else:
+            message = '%d of %d packages have been disabled.' % (num_disabled, num_packages)
+
+        sublime.status_message(message)
+
+
+def enable_packages_by_name(names: list[str]) -> None:
+    with ActivityIndicator():
+        unique_packages = set(names)
+        PackageDisabler.reenable_packages({PackageDisabler.ENABLE: unique_packages})
+
+        if len(unique_packages) == 1:
+            message = 'Package %s successfully enabled.' % names[0]
+        else:
+            message = '%d packages have been enabled.' % len(unique_packages)
+
+        sublime.status_message(message)
 
 
 def run_pc_remove_task(packages: list[str], progress: ActivityIndicator):
