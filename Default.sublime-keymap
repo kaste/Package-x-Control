@@ -29,10 +29,18 @@
         ]
     },
     {
+        "keys": ["primary+v"],
+        "command": "pxc_install_package",
+        "context": [
+            { "key": "setting.pxc_dashboard" },
+        ]
+
+    },
+    {
         "keys": ["u"],
         "command": "pxc_update_package",
         "context": [
             { "key": "setting.pxc_dashboard" },
         ]
-    }
+    },
 ]

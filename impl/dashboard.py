@@ -42,6 +42,7 @@ from . import worker
 __all__ = (
     "pxc_dashboard",
     "pxc_listener",
+    "pxc_install_package",
     "pxc_update_package",
     "pxc_toggle_disable_package",
     "pxc_open_packagecontrol_io",
@@ -184,6 +185,17 @@ class pxc_listener(sublime_plugin.EventListener):
         return None
 
 
+class pxc_install_package(sublime_plugin.TextCommand):
+    def run(self, edit, name: str = None):
+        view = self.view
+
+        if name is None:
+            name = sublime.get_clipboard(size_limit=1024)
+            if not name:
+                view.show_popup("Nothing in the clipboard")
+                return
+
+        worker.add_task("package_control_fx", install_package_from_name, name)
 
 
 class pxc_update_package(sublime_plugin.TextCommand):
