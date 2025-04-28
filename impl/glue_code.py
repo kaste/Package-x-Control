@@ -137,13 +137,6 @@ def install_package_from_name(name: str):
         install_package(package_entry)
 
 
-def remove_package_by_name(name: str):
-    remove_package_from_configuration(name)
-    remove_package_from_repository(name, PACKAGES_REPOSITORY)
-    remove_package_from_package_control_data(name)
-    sublime.run_command("remove_packages", {"packages": [name]})
-
-
 def disable_packages_by_name(names: list[str]) -> None:
     unique_packages = set(names)
     disabled = PackageDisabler.disable_packages({PackageDisabler.DISABLE: unique_packages})
@@ -201,6 +194,19 @@ def parse_url_from_user_input(clip_content):
             else:
                 return "{}{}/{}.git".format(hub, owner, name)
     return ""
+
+
+def remove_package_by_name(name: str):
+    with ActivityIndicator() as progress:
+        remove_package_from_configuration(name)
+        remove_package_from_repository(name, PACKAGES_REPOSITORY)
+        remove_package_from_package_control_data(name)
+        run_pc_remove_task([name], progress)
+
+
+def run_pc_remove_task(packages: list[str], progress: ActivityIndicator):
+    remover = PackageTaskRunner()
+    remover.remove_packages(packages, progress)
 
 
 def run_pc_install_task(packages: list[str], progress: ActivityIndicator, unattended: bool = True):
