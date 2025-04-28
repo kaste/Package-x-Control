@@ -30,12 +30,57 @@ from .git_package import (
     check_for_updates, ensure_repository, describe_current_commit, get_commit_date
 )
 from .glue_code import (
-    disable_packages_by_name, enable_packages_by_name, get_update_info, install_package
+    disable_packages_by_name, enable_packages_by_name, get_update_info,
+    install_package, install_package_from_name
 )
 from .pc_repository import fetch_packages, PackageDb
 from .runtime import ensure_on_ui, gather, run_on_executor
 from .utils import drop_falsy, format_items, human_date, remove_prefix
 from . import worker
+
+
+__all__ = (
+    "pxc_dashboard",
+    "pxc_listener",
+    "pxc_update_package",
+    "pxc_toggle_disable_package",
+    "pxc_open_packagecontrol_io",
+    "pxc_render",
+    "pxc_next_package",
+    "pxc_previous_package",
+)
+
+
+class VersionDescription(NamedTuple):
+    kind: str  # 'tag', 'branch', 'commit'
+    specifier: str
+    date: Optional[float] = None  # Date for this version/commit
+
+
+class PackageInfo(TypedDict, total=False):
+    name: str
+    version: VersionDescription | None  # Current version/commit
+    update_available: VersionDescription | None  # Info about available update
+    checked_out: bool  # If the package is a git checkout
+
+
+class State(TypedDict, total=False):
+    installed_packages: list[PackageInfo]
+    package_controlled_packages: list[PackageInfo]
+    unmanaged_packages: list[PackageInfo]
+    disabled_packages: list[str]  # List of package names that are disabled
+    status_messages: deque[str]  # For messages at the bottom
+    registered_packages: PackageDb
+
+
+state: State = {
+    "installed_packages": [],
+    "package_controlled_packages": [],
+    "unmanaged_packages": [],
+    "disabled_packages": [],
+    "status_messages": deque([], 10),
+    "registered_packages": {}
+}
 
 
 # Configuration object for dashboard formatting
@@ -66,18 +111,10 @@ HELP_TEXT = """
 ;                                      [u]  update package
 ; [ctrl+backspace]  delete package     [U]  unpack package
 """
-
-
-__all__ = (
-    "pxc_dashboard",
-    "pxc_listener",
-    "pxc_update_package",
-    "pxc_toggle_disable_package",
-    "pxc_open_packagecontrol_io",
-    "pxc_render",
-    "pxc_next_package",
-    "pxc_previous_package",
-)
+RESERVED_PACKAGES = {
+    'Binary', 'Default', 'Text', 'User', 'Package Control',
+    'Package x Control',
+}
 
 
 class pxc_dashboard(sublime_plugin.WindowCommand):
@@ -147,11 +184,6 @@ class pxc_listener(sublime_plugin.EventListener):
         return None
 
 
-
-RESERVED_PACKAGES = {
-    'Binary', 'Default', 'Text', 'User',
-    'Package Control', 'Package x Control',
-}
 
 
 class pxc_update_package(sublime_plugin.TextCommand):
@@ -237,6 +269,44 @@ class pxc_open_packagecontrol_io(sublime_plugin.TextCommand):
             view.show_popup(message)
 
 
+class pxc_next_package(sublime_plugin.TextCommand):
+    def run(self, edit):
+        regions = self.view.find_by_selector("entity.name.package")
+        if not regions:
+            return
+
+        current_pos = self.view.sel()[0].begin()
+        for region in regions:
+            if region.begin() > current_pos:
+                next_region = region
+                break
+        else:
+            next_region = regions[0]
+
+        self.view.sel().clear()
+        self.view.sel().add(next_region)
+        self.view.show(next_region)
+
+
+class pxc_previous_package(sublime_plugin.TextCommand):
+    def run(self, edit):
+        regions = self.view.find_by_selector("entity.name.package")
+        if not regions:
+            return
+
+        current_pos = self.view.sel()[0].begin()
+        for region in reversed(regions):
+            if region.begin() < current_pos:
+                previous_region = region
+                break
+        else:
+            previous_region = regions[-1]
+
+        self.view.sel().clear()
+        self.view.sel().add(previous_region)
+        self.view.show(previous_region)
+
+
 def get_selected_packages(view: sublime.View) -> list[str]:
     """
     Returns the package name on the line of the single cursor in the view.
@@ -257,43 +327,6 @@ def flash(view: sublime.View, message: str):
     window = view.window()
     if window:
         window.status_message(message)
-
-
-class VersionDescription(NamedTuple):
-    kind: str  # 'tag', 'branch', 'commit'
-    specifier: str
-    date: Optional[float] = None  # Date for this version/commit
-
-
-class PackageInfo(TypedDict, total=False):
-    name: str
-    version: VersionDescription | None  # Current version/commit
-    update_available: VersionDescription | None  # Info about available update
-    checked_out: bool  # If the package is a git checkout
-
-
-class State(TypedDict, total=False):
-    installed_packages: list[PackageInfo]
-    package_controlled_packages: list[PackageInfo]
-    unmanaged_packages: list[PackageInfo]
-    disabled_packages: list[str]  # List of package names that are disabled
-    status_messages: deque[str]  # For messages at the bottom
-    registered_packages: PackageDb
-
-
-def datetime_to_ts(string) -> float:
-    dt = datetime.strptime(string, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-    return dt.timestamp()
-
-
-state: State = {
-    "installed_packages": [],
-    "package_controlled_packages": [],
-    "unmanaged_packages": [],
-    "disabled_packages": [],
-    "status_messages": deque([], 10),
-    "registered_packages": {}
-}
 
 
 def render(view: sublime.View, current_state: State, config: Config = DEFAULT_CONFIG) -> None:
@@ -359,44 +392,6 @@ class pxc_render(sublime_plugin.TextCommand):
         ]
         view.sel().clear()
         view.sel().add_all(sel)
-
-
-class pxc_next_package(sublime_plugin.TextCommand):
-    def run(self, edit):
-        regions = self.view.find_by_selector("entity.name.package")
-        if not regions:
-            return
-
-        current_pos = self.view.sel()[0].begin()
-        for region in regions:
-            if region.begin() > current_pos:
-                next_region = region
-                break
-        else:
-            next_region = regions[0]
-
-        self.view.sel().clear()
-        self.view.sel().add(next_region)
-        self.view.show(next_region)
-
-
-class pxc_previous_package(sublime_plugin.TextCommand):
-    def run(self, edit):
-        regions = self.view.find_by_selector("entity.name.package")
-        if not regions:
-            return
-
-        current_pos = self.view.sel()[0].begin()
-        for region in reversed(regions):
-            if region.begin() < current_pos:
-                previous_region = region
-                break
-        else:
-            previous_region = regions[-1]
-
-        self.view.sel().clear()
-        self.view.sel().add(previous_region)
-        self.view.show(previous_region)
 
 
 # --- Formatting Functions ---
@@ -573,10 +568,6 @@ def format_package_terse(
         version_part,
         date_text
     ))
-
-
-def timestamp_to_date(ts: float) -> str:
-    return datetime.utcfromtimestamp(ts).strftime("%b %d %Y")
 
 
 def is_package_disabled(pkg_name: str, state: State) -> bool:
@@ -929,3 +920,12 @@ def is_calendar_version(version_str: str) -> Literal[False] | float:
 def calendar_version_to_timestamp(version_str: str) -> float:
     dt = datetime.strptime(version_str, "%Y.%m.%d.%H.%M.%S").replace(tzinfo=timezone.utc)
     return dt.timestamp()
+
+
+def datetime_to_ts(string) -> float:
+    dt = datetime.strptime(string, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    return dt.timestamp()
+
+
+def timestamp_to_date(ts: float) -> str:
+    return datetime.utcfromtimestamp(ts).strftime("%b %d %Y")
