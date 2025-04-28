@@ -40,20 +40,20 @@ from . import worker
 
 # Configuration object for dashboard formatting
 class Config:
-    # Column width calculation
-    COLUMN_WIDTH_PERCENTILE = 0.75  # For wide section name width
-    COLUMN_WIDTH_FACTOR = 1.1       # For wide section name width
-
     # Formatting constants
     COLUMN_SPACING = "  "           # Two spaces between columns
     INDENT_WIDTH = 4                # Standard indentation (4 spaces)
 
     # Default column widths
-    TERSE_SECTION_MIN_NAME_WIDTH = 10    # Default name width if no packages
-    TERSE_SECTION_MIN_VERSION_WIDTH = 8  # Minimum version width if no packages
+    TERSE_SECTION_MIN_NAME_WIDTH = 10
+    TERSE_SECTION_WIDTH_PERCENTILE = 0.95
+    TERSE_SECTION_WIDTH_FACTOR = 1.4
+    TERSE_SECTION_MIN_VERSION_WIDTH = 8
 
     # Wide section configuration
     WIDE_SECTION_MIN_NAME_WIDTH = 25     # Minimum width for package names
+    WIDE_SECTION_WIDTH_PERCENTILE = 0.75
+    WIDE_SECTION_WIDTH_FACTOR = 1.1
     WIDE_SECTION_MIN_VERSION_WIDTH = 10  # Minimum width for versions
 
 
@@ -625,8 +625,8 @@ def calculate_wide_section_widths(
     """Calculate column widths for wide section format."""
     name_width = weighted_length(
         [pkg['name'] for pkg in packages] or [''],
-        config.COLUMN_WIDTH_PERCENTILE,
-        config.COLUMN_WIDTH_FACTOR,
+        config.WIDE_SECTION_WIDTH_PERCENTILE,
+        config.WIDE_SECTION_WIDTH_FACTOR,
         config.WIDE_SECTION_MIN_NAME_WIDTH
     )
     version_width = max(
@@ -642,10 +642,8 @@ def calculate_terse_section_widths(
     """Calculate column widths for terse section format."""
     name_width = weighted_length(
         [pkg['name'] for pkg in packages] or [''],
-        0.95,
-        1.4,
-        # config.COLUMN_WIDTH_PERCENTILE,
-        # config.COLUMN_WIDTH_FACTOR,
+        config.TERSE_SECTION_WIDTH_PERCENTILE,
+        config.TERSE_SECTION_WIDTH_FACTOR,
         config.TERSE_SECTION_MIN_NAME_WIDTH
     )
     # name_lengths = (len(pkg.get('name', '')) for pkg in packages)
