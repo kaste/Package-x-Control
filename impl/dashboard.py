@@ -157,6 +157,13 @@ RESERVED_PACKAGES = {
 class pxc_update_package(sublime_plugin.TextCommand):
     def run(self, edit):
         view = self.view
+
+        def fx_(entry: PackageConfiguration):
+            install_package(entry)
+            message = f"Updated {entry['name']}."
+            state["status_messages"].append(message)
+            refresh(view)
+
         config_data = get_configuration()
         entries = process_config(config_data)
         for package in get_selected_packages(view):
@@ -169,9 +176,7 @@ class pxc_update_package(sublime_plugin.TextCommand):
                 if entry["name"] == name:
                     package_info = get_update_info(entry)
                     if package_info["status"] == "needs-update":
-                        # print("install_package", entry)
-                        worker.add_task("install_package", install_package, entry)
-                        # install_package(entry)
+                        worker.add_task("package_control_fx", fx_, entry)
                     else:
                         view.show_popup(f"no update available for {name}")
                     break
