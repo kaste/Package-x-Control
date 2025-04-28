@@ -157,17 +157,13 @@ RESERVED_PACKAGES = {
 class pxc_update_package(sublime_plugin.TextCommand):
     def run(self, edit):
         view = self.view
-        installed_packages = state["installed_packages"]
         config_data = get_configuration()
         entries = process_config(config_data)
         for package in get_selected_packages(view):
             name = extract_repo_name(package)
-            for p in installed_packages:
-                if p["name"] == name:
-                    break
-            else:
-                view.show_popup("[u] only implemented for INSTALLED PACKAGES")
-                return
+            if not is_managed_by_us(name):
+                view.show_popup("[u] is only implemented for INSTALLED PACKAGES")
+                continue
 
             for entry in entries:
                 if entry["name"] == name:
@@ -179,6 +175,13 @@ class pxc_update_package(sublime_plugin.TextCommand):
                     else:
                         view.show_popup(f"no update available for {name}")
                     break
+
+
+def is_managed_by_us(name: str) -> bool:
+    for p in state["installed_packages"]:
+        if p["name"] == name:
+            return True
+    return False
 
 
 class pxc_toggle_disable_package(sublime_plugin.TextCommand):
