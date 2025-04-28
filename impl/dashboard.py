@@ -34,7 +34,7 @@ from .glue_code import (
     install_package, install_package_from_name
 )
 from .pc_repository import fetch_packages, PackageDb
-from .runtime import ensure_on_ui, gather, run_on_executor
+from .runtime import ensure_on_ui
 from .utils import drop_falsy, format_items, human_date, remove_prefix
 from . import worker
 
