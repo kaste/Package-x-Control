@@ -93,7 +93,7 @@ def update_all_managed_packages() -> None:
 
 
 def install_package(entry: PackageConfiguration):
-    with ActivityIndicator('Preparing...') as progress:
+    with ActivityIndicator('Installing...') as progress:
         package_info = get_update_info(entry)
         if package_info["version"]:
             add_package_to_configuration(entry)
