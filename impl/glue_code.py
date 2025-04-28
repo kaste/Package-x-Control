@@ -89,7 +89,7 @@ def update_all_managed_packages() -> None:
         recreate_repository(packages, PACKAGES_REPOSITORY)
         installed_packages = [package["name"] for package in packages]
         overwrite_package_control_data(installed_packages)
-        call_the_pc(installed_packages, progress, unattended=True)
+        run_pc_install_task(installed_packages, progress, unattended=True)
 
 
 def install_package(entry: PackageConfiguration):
@@ -100,7 +100,7 @@ def install_package(entry: PackageConfiguration):
             package = create_package_entry(package_info)
             add_package_to_repository(package, PACKAGES_REPOSITORY)
             add_package_to_package_control_data(package["name"])
-            call_the_pc([package["name"]], progress, unattended=False)
+            run_pc_install_task([package["name"]], progress, unattended=False)
 
 
 def install_proprietary_package(name: str):
@@ -203,7 +203,7 @@ def parse_url_from_user_input(clip_content):
     return ""
 
 
-def call_the_pc(packages: list[str], progress: ActivityIndicator, unattended: bool = True):
+def run_pc_install_task(packages: list[str], progress: ActivityIndicator, unattended: bool = True):
     """Delegate to Package Control to install or upgrade packages."""
     upgrader = PackageTaskRunner()
     tasks = upgrader.create_package_tasks(
