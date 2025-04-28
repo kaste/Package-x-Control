@@ -108,7 +108,7 @@ def install_package_from_name(name: str):
     url = None
     if name.startswith("https://packagecontrol.io/packages/"):
         name = urllib.parse.unquote(name[35:])
-    elif url := parse_url_from_clipboard(name):
+    elif url := parse_url_from_user_input(name):
         name = remove_suffix(url.rsplit("/", 1)[1], ".git")
 
     if package_control_entry := reverse_lookup(name):
@@ -178,7 +178,7 @@ HUBS = [
 ]
 
 
-def parse_url_from_clipboard(clip_content):
+def parse_url_from_user_input(clip_content):
     # type: (str) -> str
     if not clip_content:
         return ""
