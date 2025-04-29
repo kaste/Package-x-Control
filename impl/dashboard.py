@@ -227,12 +227,14 @@ class pxc_install_package(sublime_plugin.TextCommand):
 
         def install_package_fx_(entry: PackageConfiguration):
             name = entry['name']
+            print("Install", name, entry)
             maybe_handover_control_from_pc(name)
             install_package(entry)
             ensure_package_is_enabled(name)
             log_fx_(name)
 
         def install_proprietary_package_fx_(name: str):
+            print("Install", name)
             install_proprietary_package(name)
             ensure_package_is_enabled(name)
             log_fx_(name)
