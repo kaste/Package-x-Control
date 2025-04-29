@@ -228,12 +228,22 @@ class pxc_install_package(sublime_plugin.TextCommand):
         url = None
 
         def install_package_fx_(entry: PackageConfiguration):
+            name = entry['name']
+            maybe_handover_control_from_pc(name)
             install_package(entry)
-            log_fx_(entry['name'])
+            log_fx_(name)
 
         def install_proprietary_package_fx_(name: str):
             install_proprietary_package(name)
             log_fx_(name)
+
+        def maybe_handover_control_from_pc(name: str):
+            s = sublime.load_settings(PACKAGE_CONTROL_PREFERENCES)
+            installed_packages = set(s.get("installed_packages", []))
+            if name in installed_packages:
+                installed_packages.discard(name)
+                s.set("installed_packages", sorted(installed_packages, key=lambda s: s.lower()))
+                sublime.save_settings(PACKAGE_CONTROL_PREFERENCES)
 
         def log_fx_(name: str):
             message = f"Installed {name}."
