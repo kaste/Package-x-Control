@@ -206,49 +206,6 @@ def save_packages_cache(cache_file: str, packages_data: PackageDb, log: LogWrite
         log(f"Failed to save cache: {e}")
 
 
-def reverse_lookup(name):
-    packages = fetch_packages(BUILD, PLATFORM, lambda *a: None)
-    return packages.get(name)
-
-    """
-    github
-    https://github.com/alexkuz/SublimeLinter-inline-errors
-    https://github.com/alexkuz/SublimeLinter-inline-errors.git
-    git@github.com:alexkuz/SublimeLinter-inline-errors.git
-    user: alexkuz project_name: SublimeLinter-inline-errors
-    website: https://github.com/alexkuz/SublimeLinter-inline-errors
-    subsites:
-        https://github.com/alexkuz/SublimeLinter-inline-errors/*
-
-    gitlab
-    https://gitlab.com/odhin-themes/sublime.git
-    git@gitlab.com:odhin-themes/sublime.git
-    user: odhin-themes  project_name: sublime
-    website: https://gitlab.com/odhin-themes/sublime
-    subsites:
-        https://gitlab.com/odhin-themes/sublime/*
-
-    bitbucket
-    https://bitbucket.org/ralmn/symfonytools-for-sublimetext-2.git
-    git@bitbucket.org:ralmn/symfonytools-for-sublimetext-2.git
-    user: ralmn  project_name: symfonytools-for-sublimetext-2
-    website: https://bitbucket.org/ralmn/symfonytools-for-sublimetext-2
-    usual subpages:
-      https://bitbucket.org/ralmn/symfonytools-for-sublimetext-2/*
-
-
-    package control io
-    https://packagecontrol.io/packages/Git
-    https://packagecontrol.io/packages/Sync%20Merge%20Scheme
-    extract name:
-        Git
-        "Sync Merge Scheme"
-
-
-
-    """
-
-
 def supported_domain(url: str) -> bool:
     return any(
         domain in url

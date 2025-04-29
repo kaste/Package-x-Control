@@ -37,7 +37,7 @@ from .glue_code import (
     disable_packages_by_name, enable_packages_by_name, get_update_info,
     install_package, install_proprietary_package
 )
-from .pc_repository import fetch_packages, reverse_lookup, PackageDb
+from .pc_repository import extract_name_from_url, fetch_packages, PackageDb, PackageControlEntry
 from .runtime import ensure_on_ui
 from .utils import (
     drop_falsy, format_items, human_date, remove_prefix, remove_suffix
@@ -217,17 +217,13 @@ class pxc_listener(sublime_plugin.EventListener):
 class pxc_install_package(sublime_plugin.TextCommand):
     def run(self, edit, name: str = None):
         view = self.view
+        registered_packages = state["registered_packages"]
 
         if name is None:
             name = sublime.get_clipboard(size_limit=1024)
             if not name:
                 view.show_popup("Nothing in the clipboard")
                 return
-
-        package_entry: PackageConfiguration
-        final_name = None
-        refs = None
-        url = None
 
         def install_package_fx_(entry: PackageConfiguration):
             name = entry['name']
@@ -258,18 +254,32 @@ class pxc_install_package(sublime_plugin.TextCommand):
             state["status_messages"].append(message)
             refresh()
 
-        if name.startswith("https://packagecontrol.io/packages/"):
-            final_name = urllib.parse.unquote(name[35:])
-        elif url := parse_url_from_user_input(name):
+        def lookup_by_encoded_name_in_url(name: str) -> PackageControlEntry | None:
+            for p in registered_packages.values():
+                if extract_name_from_url(p.get("git_url")) == name:  # type: ignore[arg-type]
+                    return p
+            return None
+
+        if url := parse_url_from_user_input(name):
             final_name = remove_suffix(url.rsplit("/", 1)[1], ".git")
             refs = parse_refs_from_user_input(name)
+            package_control_entry = lookup_by_encoded_name_in_url(final_name)
+        else:
+            final_name = (
+                urllib.parse.unquote(name[35:])
+                if name.startswith("https://packagecontrol.io/packages/")
+                else name
+            )
+            refs = None
+            package_control_entry = registered_packages.get(final_name)
 
-        if package_control_entry := reverse_lookup(final_name or name):
+        package_entry: PackageConfiguration
+        if package_control_entry:
             if "git_url" in package_control_entry:
                 package_entry = {
                     "name": package_control_entry["name"],
-                    "url": url or package_control_entry["git_url"],
-                    "refs": refs or package_control_entry["refs"],
+                    "url": url or package_control_entry["git_url"],  # type: ignore[typeddict-item]
+                    "refs": refs or package_control_entry["refs"],   # type: ignore[typeddict-item]
                     "unpacked": False
                 }
                 worker.add_task("package_control_fx", install_package_fx_, package_entry)
@@ -279,7 +289,7 @@ class pxc_install_package(sublime_plugin.TextCommand):
                     install_proprietary_package_fx_,
                     package_control_entry["name"]
                 )
-        elif url and final_name:
+        elif url:
             package_entry = {
                 "name": final_name,
                 "url": url,
