@@ -225,6 +225,7 @@ class pxc_install_package(sublime_plugin.TextCommand):
                 return
 
         package_entry: PackageConfiguration
+        refs = None
         url = None
 
         def install_package_fx_(entry: PackageConfiguration):
@@ -259,6 +260,7 @@ class pxc_install_package(sublime_plugin.TextCommand):
         if name.startswith("https://packagecontrol.io/packages/"):
             name = urllib.parse.unquote(name[35:])
         elif url := parse_url_from_user_input(name):
+            refs = parse_refs_from_user_input(name)
             name = remove_suffix(url.rsplit("/", 1)[1], ".git")
 
         if package_control_entry := reverse_lookup(name):
@@ -266,7 +268,7 @@ class pxc_install_package(sublime_plugin.TextCommand):
                 package_entry = {
                     "name": package_control_entry["name"],
                     "url": url or package_control_entry["git_url"],
-                    "refs": package_control_entry["refs"],
+                    "refs": refs or package_control_entry["refs"],
                     "unpacked": False
                 }
                 worker.add_task("package_control_fx", install_package_fx_, package_entry)
@@ -280,7 +282,7 @@ class pxc_install_package(sublime_plugin.TextCommand):
             package_entry = {
                 "name": name,
                 "url": url,
-                "refs": "tags/*",
+                "refs": refs or "tags/*",
                 "unpacked": False
             }
             worker.add_task("package_control_fx", install_package_fx_, package_entry)
@@ -314,6 +316,21 @@ def parse_url_from_user_input(clip_content: str) -> str:
                 return ""
             else:
                 return "{}{}/{}.git".format(hub, owner, name)
+    return ""
+
+
+def parse_refs_from_user_input(clip_content: str) -> str:
+    if not clip_content:
+        return ""
+
+    """
+    https://github.com/timbrel/GitSavvy/pull/1750 -> refs/pull/1750/head
+    https://github.com/timbrel/GitSavvy/releases/tag/2.50.0 -> refs/tags/2.50.0
+    """
+    if match := re.search(r"/pull/(\d+)$", clip_content):
+        return f"pull/{match.group(1)}/head"
+    if match := re.search(r"/releases/tag/([^/]+)$", clip_content):
+        return f"tags/{match.group(1)}"
     return ""
 
 
