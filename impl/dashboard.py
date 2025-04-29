@@ -231,10 +231,12 @@ class pxc_install_package(sublime_plugin.TextCommand):
             name = entry['name']
             maybe_handover_control_from_pc(name)
             install_package(entry)
+            ensure_package_is_enabled(name)
             log_fx_(name)
 
         def install_proprietary_package_fx_(name: str):
             install_proprietary_package(name)
+            ensure_package_is_enabled(name)
             log_fx_(name)
 
         def maybe_handover_control_from_pc(name: str):
@@ -244,6 +246,10 @@ class pxc_install_package(sublime_plugin.TextCommand):
                 installed_packages.discard(name)
                 s.set("installed_packages", sorted(installed_packages, key=lambda s: s.lower()))
                 sublime.save_settings(PACKAGE_CONTROL_PREFERENCES)
+
+        def ensure_package_is_enabled(name: str):
+            if name in state["disabled_packages"]:
+                enable_packages_by_name([name])
 
         def log_fx_(name: str):
             message = f"Installed {name}."
