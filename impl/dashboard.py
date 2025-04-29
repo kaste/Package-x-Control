@@ -225,6 +225,7 @@ class pxc_install_package(sublime_plugin.TextCommand):
                 return
 
         package_entry: PackageConfiguration
+        final_name = None
         refs = None
         url = None
 
@@ -258,12 +259,12 @@ class pxc_install_package(sublime_plugin.TextCommand):
             refresh()
 
         if name.startswith("https://packagecontrol.io/packages/"):
-            name = urllib.parse.unquote(name[35:])
+            final_name = urllib.parse.unquote(name[35:])
         elif url := parse_url_from_user_input(name):
+            final_name = remove_suffix(url.rsplit("/", 1)[1], ".git")
             refs = parse_refs_from_user_input(name)
-            name = remove_suffix(url.rsplit("/", 1)[1], ".git")
 
-        if package_control_entry := reverse_lookup(name):
+        if package_control_entry := reverse_lookup(final_name or name):
             if "git_url" in package_control_entry:
                 package_entry = {
                     "name": package_control_entry["name"],
@@ -278,9 +279,9 @@ class pxc_install_package(sublime_plugin.TextCommand):
                     install_proprietary_package_fx_,
                     package_control_entry["name"]
                 )
-        elif url:
+        elif url and final_name:
             package_entry = {
-                "name": name,
+                "name": final_name,
                 "url": url,
                 "refs": refs or "tags/*",
                 "unpacked": False
