@@ -413,12 +413,21 @@ def ensure_repository(
     os.makedirs(package_dir, exist_ok=True)
 
     git = Git(package_dir)
-    if not os.path.exists(git.git_dir):
+    if not os.path.exists(git.git_dir) or not repo_is_valid(git):
         git("init")
 
     # Always set the remote to ensure it follows configuration changes
     configure_remote(config['url'], git)
     return git
+
+
+def repo_is_valid(git: GitCallable) -> bool:
+    try:
+        git("rev-parse", "--is-inside-work-tree")
+    except subprocess.CalledProcessError:
+        return False
+    else:
+        return True
 
 
 def configure_remote(remote_url: str, git: GitCallable):
