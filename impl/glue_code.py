@@ -6,6 +6,8 @@ import os
 import shutil
 import stat
 
+from typing import Callable
+
 import sublime
 
 from package_control.package_disabler import PackageDisabler
@@ -39,23 +41,32 @@ def get_update_info(entry: PackageConfiguration) -> PackageInfo:
     return update_package(entry, ROOT_DIR, BUILD, GitCallable)
 
 
-def sync_managed_packages_with_package_control() -> None:
-    def check_package_(entry: PackageConfiguration) -> Future[PackageInfo]:
-        return worker.add_task(entry["name"], _check_package, entry)
+def check_our_integrity() -> None:
+    _for_all_managed_packages(_check_package)
 
-    config_data = get_configuration()
-    packages = gather([check_package_(entry) for entry in process_config(config_data)])
-    installed_packages = [
-        create_package_entry(package_info)
-        for package_info in packages
-        if package_info["version"]
-    ]
-    recreate_repository(installed_packages, PACKAGES_REPOSITORY)
-    overwrite_package_control_data([p["name"] for p in installed_packages])
+
+def update_all_managed_packages() -> None:
+    _for_all_managed_packages(get_update_info)
+
+
+def _for_all_managed_packages(fn: Callable[[PackageConfiguration], PackageInfo]):
+    with ActivityIndicator():
+        config_data = get_configuration()
+        packages = gather([
+            worker.add_task(entry["name"], fn, entry)
+            for entry in process_config(config_data)
+        ])
+        installed_packages = [
+            create_package_entry(package_info)
+            for package_info in packages
+            if package_info["version"]
+        ]
+        recreate_repository(installed_packages, PACKAGES_REPOSITORY)
+        names = [p["name"] for p in installed_packages]
+        overwrite_package_control_data(names)
+
     # fire-and-forget
-    worker.add_task(
-        "cleanup_orphaned_packages", cleanup_orphaned_packages, [p["name"] for p in packages]
-    )
+    worker.add_task("cleanup_orphaned_packages", cleanup_orphaned_packages, names)
 
 
 def cleanup_orphaned_packages(packages: list[str]) -> None:
@@ -93,25 +104,6 @@ def cleanup_orphaned_packages(packages: list[str]) -> None:
             remove_readonly_bit_and_retry(os.remove, fpath, None)
         except OSError:
             continue
-
-
-def update_all_managed_packages() -> None:
-    def update_info_(entry: PackageConfiguration) -> Future[PackageInfo]:
-        return worker.add_task(entry["name"], get_update_info, entry)
-
-    with ActivityIndicator('Preparing...') as progress:
-        config_data = get_configuration()
-        packages = [
-            create_package_entry(package_info)
-            for package_info in gather(
-                [update_info_(entry) for entry in process_config(config_data)]
-            )
-            if package_info["status"] == "needs-update"
-        ]
-        recreate_repository(packages, PACKAGES_REPOSITORY)
-        installed_packages = [package["name"] for package in packages]
-        overwrite_package_control_data(installed_packages)
-        run_pc_install_task(installed_packages, progress, unattended=True)
 
 
 def install_package(entry: PackageConfiguration):

@@ -15,7 +15,7 @@ from .config import (
     PLATFORM,
     ROOT_DIR,
 )
-from .glue_code import sync_managed_packages_with_package_control
+from .glue_code import check_our_integrity
 from .pc_repository import fetch_packages
 from .repository import ensure_repository_registry
 from .runtime import determine_thread_names, run_on_executor
@@ -68,9 +68,9 @@ def boot():
 
     # Ensure managed packages are in sync with Package Control
     # sublime.load_settings(PACKAGE_SETTINGS).add_on_change(
-    #     PACKAGE_SETTINGS_LISTENER_KEY, sync_managed_packages_with_package_control
+    #     PACKAGE_SETTINGS_LISTENER_KEY, check_our_integrity
     # )
-    run_on_executor(sync_managed_packages_with_package_control)
+    run_on_executor(check_our_integrity)
     # sublime.set_timeout_async(
     #     lambda: run_on_executor(fetch_packages, BUILD, PLATFORM, dprint, force=True), 1000)
 
