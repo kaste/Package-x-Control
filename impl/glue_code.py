@@ -28,6 +28,7 @@ from .repository import (
     remove_package_from_repository
 )
 from .runtime import gather
+from .utils import remove_suffix
 from . import worker
 
 
@@ -75,6 +76,23 @@ def cleanup_orphaned_packages(packages: list[str]) -> None:
     ]
     for directory in orphaned_directories:
         shutil.rmtree(directory, onerror=remove_readonly_bit_and_retry)
+
+    orphaned_archives = [
+        full_path
+        for name in os.listdir(ROOT_DIR)
+        if not name.startswith(".")
+        if name.endswith(".zip")
+        if remove_suffix(name, ".zip") not in packages
+        if (full_path := os.path.join(ROOT_DIR, name))
+        if (os.path.exists(full_path))
+    ]
+    for fpath in orphaned_archives:
+        try:
+            os.remove(fpath)
+        except PermissionError:
+            remove_readonly_bit_and_retry(os.remove, fpath, None)
+        except OSError:
+            continue
 
 
 def update_all_managed_packages() -> None:
