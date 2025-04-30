@@ -415,6 +415,9 @@ def ensure_repository(
     git = Git(package_dir)
     if not os.path.exists(git.git_dir) or not repo_is_valid(git):
         git("init")
+        git("config", "core.fsmonitor", "false")
+        git("config", "core.usebuiltinfsmonitor", "false")
+        git("fsmonitor--daemon", "stop", check=False)
 
     # Always set the remote to ensure it follows configuration changes
     configure_remote(config['url'], git)
