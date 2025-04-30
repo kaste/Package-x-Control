@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from functools import partial
 import os
 import shutil
+import stat
 
 import sublime
 
@@ -57,6 +58,13 @@ def sync_managed_packages_with_package_control() -> None:
 
 
 def cleanup_orphaned_packages(packages: list[str]) -> None:
+    def remove_readonly_bit_and_retry(func, path, exc_info):
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except OSError:
+            pass
+
     orphaned_directories = [
         full_path
         for name in os.listdir(ROOT_DIR)
@@ -66,7 +74,7 @@ def cleanup_orphaned_packages(packages: list[str]) -> None:
         if os.path.isdir(full_path)
     ]
     for directory in orphaned_directories:
-        shutil.rmtree(directory, ignore_errors=True)
+        shutil.rmtree(directory, onerror=remove_readonly_bit_and_retry)
 
 
 def update_all_managed_packages() -> None:
