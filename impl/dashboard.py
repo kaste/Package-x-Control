@@ -34,7 +34,7 @@ from .git_package import (
     check_for_updates, ensure_repository, describe_current_commit, get_commit_date
 )
 from .glue_code import (
-    disable_packages_by_name, enable_packages_by_name, get_update_info,
+    disable_packages_by_name, enable_packages_by_name,
     install_package, install_proprietary_package
 )
 from .pc_repository import extract_name_from_url, fetch_packages, PackageDb, PackageControlEntry
@@ -360,19 +360,31 @@ class pxc_update_package(sublime_plugin.TextCommand):
         config_data = get_configuration()
         entries = process_config(config_data)
         for package in get_selected_packages(view):
-            name = extract_repo_name(package)
-            if not is_managed_by_us(name):
+            package_info = grab_package_info_by_name(package)
+            if not package_info:
                 view.show_popup("[u] is only implemented for INSTALLED PACKAGES")
                 continue
 
+            if not package_info["update_available"]:
+                view.show_popup(f"no update available for {package}")
+                continue
+
+            name = extract_repo_name(package)
             for entry in entries:
                 if entry["name"] == name:
-                    package_info = get_update_info(entry)
-                    if package_info["status"] == "needs-update":
-                        worker.add_task("package_control_fx", fx_, entry)
-                    else:
-                        view.show_popup(f"no update available for {name}")
+                    worker.add_task("package_control_fx", fx_, entry)
                     break
+            else:
+                print(f"fatal: {name} not found in the PxC-settings")
+                view.show_popup(f"Huh?  {name} not found in the PxC-settings")
+                continue
+
+
+def grab_package_info_by_name(name: str) -> PackageInfo | None:
+    for p in state["installed_packages"]:
+        if p["name"] == name:
+            return p
+    return None
 
 
 def is_managed_by_us(name: str) -> bool:
