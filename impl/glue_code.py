@@ -45,7 +45,7 @@ def check_our_integrity() -> None:
     _for_all_managed_packages(_check_package)
 
 
-def update_all_managed_packages() -> None:
+def check_all_managed_packages_for_updates() -> None:
     _for_all_managed_packages(get_update_info)
 
 
