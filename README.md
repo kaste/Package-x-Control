@@ -1,5 +1,11 @@
 This is an add-on to Package Control, hence the X in the name.
 
+```bash
+git clone https://github.com/kaste/Package-x-Control.git "Package x Control"
+```
+
+Note the spaces in the name!  Package Control has them, so we do too.
+
 ## Goals
 
 An ASCII, GitSavvy like interface to Package Control.
