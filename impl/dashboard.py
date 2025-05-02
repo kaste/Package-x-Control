@@ -35,7 +35,8 @@ from .git_package import (
 )
 from .glue_code import (
     disable_packages_by_name, enable_packages_by_name,
-    install_package, install_proprietary_package
+    install_package, install_proprietary_package,
+    remove_package_by_name, remove_proprietary_package_by_name
 )
 from .pc_repository import extract_name_from_url, fetch_packages, PackageDb, PackageControlEntry
 from .runtime import ensure_on_ui
@@ -50,6 +51,7 @@ __all__ = (
     "pxc_listener",
     "pxc_install_package",
     "pxc_update_package",
+    "pxc_remove_package",
     "pxc_toggle_disable_package",
     "pxc_open_packagecontrol_io",
     "pxc_render",
@@ -338,6 +340,53 @@ class pxc_update_package(sublime_plugin.TextCommand):
                 print(f"fatal: {name} not found in the PxC-settings")
                 view.show_popup(f"Huh?  {name} not found in the PxC-settings")
                 continue
+
+
+class pxc_remove_package(sublime_plugin.TextCommand):
+    def run(self, edit):
+        view = self.view
+        installed_packages = state["installed_packages"]
+        package_controlled_packages = state["package_controlled_packages"]
+
+        def find_by_name(name: str) -> tuple[str, PackageInfo] | None:
+            for section, pkgs in [
+                ("controlled_by_us", installed_packages),
+                ("controlled_by_pc", package_controlled_packages)
+            ]:
+                for info in pkgs:
+                    if info["name"] == name:
+                        return section, info
+            return None
+
+        def remove_package_fx_(name: str):
+            remove_package_by_name(name)
+            message = f"Removed {name}."
+            state["status_messages"].append(message)
+            refresh()
+
+        def remove_proprietary_package_fx_(name: str):
+            remove_proprietary_package_by_name(name)
+            message = f"Removed {name}."
+            state["status_messages"].append(message)
+            refresh()
+
+
+        for package in get_selected_packages(view):
+            result = find_by_name(package)
+            print("result", result, package)
+            if result is None:
+                view.show_popup(f"Can only remove installed packages, and {package} is not.")
+                continue
+            section, info = result
+            if info["checked_out"]:
+                view.show_popup("Not implemented for packages that are checked out.")
+                continue
+            if section == "controlled_by_us":
+                worker.add_task("package_control_fx", remove_package_fx_, info["name"])
+            elif section == "controlled_by_pc":
+                worker.add_task("package_control_fx", remove_proprietary_package_fx_, info["name"])
+            else:
+                raise RuntimeError("this else should be unreachable")
 
 
 class pxc_toggle_disable_package(sublime_plugin.TextCommand):

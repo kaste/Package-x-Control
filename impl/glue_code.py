@@ -130,6 +130,11 @@ def remove_package_by_name(name: str):
         run_pc_remove_task([name], progress)
 
 
+def remove_proprietary_package_by_name(name: str):
+    with ActivityIndicator() as progress:
+        run_pc_remove_task([name], progress)
+
+
 def disable_packages_by_name(names: list[str]) -> None:
     with ActivityIndicator():
         unique_packages = set(names)
