@@ -6,6 +6,40 @@ git clone https://github.com/kaste/Package-x-Control.git "Package x Control"
 
 Note the spaces in the name!  Package Control has them, so we do too.
 
+##
+
+This installs only one command "Package x Control: Dashboard".  Open the
+dashboard and you will see all packages that you have on your system.
+Initially all packages are either unmanaged packages or under the section
+"PACKAGES BY PACKAGE CONTROL".  But this very add-on implements a third
+way to install packages; it is not just an UI for the same thing.
+
+So, now head over to packagecontrol.io and search for a color-scheme, really
+anything not crucial or intricating for testing.
+
+```
+https://packagecontrol.io/packages/Solarized%20Color%20Scheme
+```
+
+Copy the url and paste it into the dashboard.  `ctrl+backspace` it to remove it
+again.  Then go to a package on GitHub -- well, >90% market-share -- and copy
+
+```
+https://github.com/braver/Solarized
+```
+
+the URL over there, and paste it into the dashboard.  -- Now goto GitHub's
+releases or tags subsite, and look at a previous tag.  Grab the URL
+
+```
+https://github.com/braver/Solarized/releases/tag/3.0.1
+```
+
+and paste it again.
+
+Got it?  🤞
+
+
 ## Goals
 
 An ASCII, GitSavvy like interface to Package Control.
