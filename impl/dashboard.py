@@ -307,6 +307,66 @@ class pxc_install_package(sublime_plugin.TextCommand):
             )
 
 
+class pxc_update_package(sublime_plugin.TextCommand):
+    def run(self, edit):
+        view = self.view
+
+        def fx_(entry: PackageConfiguration):
+            install_package(entry)
+            message = f"Updated {entry['name']}."
+            state["status_messages"].append(message)
+            refresh()
+
+        config_data = get_configuration()
+        entries = process_config(config_data)
+        for package in get_selected_packages(view):
+            package_info = grab_package_info_by_name(package)
+            if not package_info:
+                view.show_popup("[u] is only implemented for INSTALLED PACKAGES")
+                continue
+
+            if not package_info["update_available"]:
+                view.show_popup(f"no update available for {package}")
+                continue
+
+            name = extract_repo_name(package)
+            for entry in entries:
+                if entry["name"] == name:
+                    worker.add_task("package_control_fx", fx_, entry)
+                    break
+            else:
+                print(f"fatal: {name} not found in the PxC-settings")
+                view.show_popup(f"Huh?  {name} not found in the PxC-settings")
+                continue
+
+
+class pxc_toggle_disable_package(sublime_plugin.TextCommand):
+    def run(self, edit):
+        view = self.view
+        to_enable, to_disable = [], []
+        for package in get_selected_packages(view):
+            if package in RESERVED_PACKAGES:
+                view.show_popup("Can't toggle built-ins.")
+                continue
+            if package in state["disabled_packages"]:
+                to_enable.append(package)
+            else:
+                to_disable.append(package)
+
+        def fx_(enable: bool, package_names: list[str]):
+            fn = enable_packages_by_name if enable else disable_packages_by_name
+            fn(package_names)
+            En = "En" if enable else "Dis"
+            message = f"{En}abled {format_items(package_names)}."
+            state["status_messages"].append(message)
+            refresh()
+
+        if to_enable:
+            worker.add_task("package_control_fx", fx_, True, to_enable)
+        if to_disable:
+            worker.add_task("package_control_fx", fx_, False, to_disable)
+
+
 HUBS = ["https://github.com/", "https://gitlab.com/", "https://bitbucket.org/"]
 
 
@@ -347,39 +407,6 @@ def parse_refs_from_user_input(clip_content: str) -> str:
     return ""
 
 
-class pxc_update_package(sublime_plugin.TextCommand):
-    def run(self, edit):
-        view = self.view
-
-        def fx_(entry: PackageConfiguration):
-            install_package(entry)
-            message = f"Updated {entry['name']}."
-            state["status_messages"].append(message)
-            refresh()
-
-        config_data = get_configuration()
-        entries = process_config(config_data)
-        for package in get_selected_packages(view):
-            package_info = grab_package_info_by_name(package)
-            if not package_info:
-                view.show_popup("[u] is only implemented for INSTALLED PACKAGES")
-                continue
-
-            if not package_info["update_available"]:
-                view.show_popup(f"no update available for {package}")
-                continue
-
-            name = extract_repo_name(package)
-            for entry in entries:
-                if entry["name"] == name:
-                    worker.add_task("package_control_fx", fx_, entry)
-                    break
-            else:
-                print(f"fatal: {name} not found in the PxC-settings")
-                view.show_popup(f"Huh?  {name} not found in the PxC-settings")
-                continue
-
-
 def grab_package_info_by_name(name: str) -> PackageInfo | None:
     for p in state["installed_packages"]:
         if p["name"] == name:
@@ -392,33 +419,6 @@ def is_managed_by_us(name: str) -> bool:
         if p["name"] == name:
             return True
     return False
-
-
-class pxc_toggle_disable_package(sublime_plugin.TextCommand):
-    def run(self, edit):
-        view = self.view
-        to_enable, to_disable = [], []
-        for package in get_selected_packages(view):
-            if package in RESERVED_PACKAGES:
-                view.show_popup("Can't toggle built-ins.")
-                continue
-            if package in state["disabled_packages"]:
-                to_enable.append(package)
-            else:
-                to_disable.append(package)
-
-        def fx_(enable: bool, package_names: list[str]):
-            fn = enable_packages_by_name if enable else disable_packages_by_name
-            fn(package_names)
-            En = "En" if enable else "Dis"
-            message = f"{En}abled {format_items(package_names)}."
-            state["status_messages"].append(message)
-            refresh()
-
-        if to_enable:
-            worker.add_task("package_control_fx", fx_, True, to_enable)
-        if to_disable:
-            worker.add_task("package_control_fx", fx_, False, to_disable)
 
 
 class pxc_open_packagecontrol_io(sublime_plugin.TextCommand):
