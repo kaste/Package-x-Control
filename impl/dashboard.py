@@ -1054,8 +1054,6 @@ def current_version_of_git_repo(repo_path: str) -> dict:
 
 def new_version_from_git_repo(entry: PackageConfiguration) -> dict:
     git = ensure_repository(entry, ROOT_DIR, GitCallable)
-    if not os.path.exists(git.git_dir):
-        return {}
     info = check_for_updates(entry["refs"], BUILD, git)
     if info["status"] == "needs-update":
         return {"update_available": git_version_to_description(info["version"], git)}
