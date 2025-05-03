@@ -927,11 +927,11 @@ def refresh_our_packages(state: State, set_state: StateSetter):
     ]
 
     def fetch_package_info(entry: PackageConfiguration) -> PackageInfo:
-        git = ensure_repository(entry, ROOT_DIR, GitCallable)
+        package_name = entry["name"]
         return {
-            "name": entry["name"],
+            "name": package_name,
             "checked_out": False,
-            **current_version_of_git_repo(git.repo_path),
+            **current_version_of_git_repo(os.path.join(ROOT_DIR, package_name)),
             **new_version_from_git_repo(entry)
         }
 
