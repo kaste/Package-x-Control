@@ -915,6 +915,7 @@ def refresh_disabled_packages(state: State, set_state: StateSetter):
 
 
 def refresh_our_packages(state: State, set_state: StateSetter):
+    pm = PackageManager()
     config_data = get_configuration()
     entries = process_config(config_data)
     _p = {
@@ -929,6 +930,24 @@ def refresh_our_packages(state: State, set_state: StateSetter):
 
     def fetch_package_info(entry: PackageConfiguration) -> PackageInfo:
         package_name = entry["name"]
+        metadata = pm.get_metadata(package_name)
+        if not metadata:
+            if (
+                os.path.exists(os.path.join(PACKAGES_PATH, package_name, ".git"))
+                and not os.path.exists(os.path.join(
+                    PACKAGES_PATH, package_name, "package-metadata.json")
+                )
+            ):
+                return {
+                    "name": package_name,
+                    "checked_out": True
+                }
+            else:
+                return {
+                    "name": package_name,
+                    "checked_out": False
+                }
+
         return {
             "name": package_name,
             "checked_out": False,
