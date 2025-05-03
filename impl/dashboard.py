@@ -843,7 +843,7 @@ def weighted_length(strings: Iterable[str], percentile: float, factor: float, mi
         return minimum
     percentile_idx = int(percentile * len(sorted_lengths))
     percentile_width = sorted_lengths[min(percentile_idx, len(sorted_lengths) - 1)]
-    return max(int(percentile_width * factor), minimum)
+    return max(min(int(percentile_width * factor), sorted_lengths[-1]), minimum)
 
 
 def calculate_wide_section_widths(
