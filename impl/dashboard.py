@@ -31,7 +31,8 @@ from .config_management import (
 )
 from .git_package import (
     GitCallable, Version,
-    check_for_updates, ensure_repository, describe_current_commit, get_commit_date
+    check_for_updates, ensure_repository, describe_current_commit, get_commit_date,
+    repo_is_valid
 )
 from .glue_code import (
     disable_packages_by_name, enable_packages_by_name,
@@ -1046,7 +1047,7 @@ def fetch_package_info(package_name: str) -> PackageInfo:
 
 def current_version_of_git_repo(repo_path: str) -> dict:
     git = GitCallable(repo_path)
-    if not os.path.exists(git.git_dir):
+    if not os.path.exists(git.git_dir) or not repo_is_valid(git):
         return {}
     version = describe_current_commit(git)
     return {"version": git_version_to_description(version, git)}
