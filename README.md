@@ -10,6 +10,9 @@ Note the spaces in the name!  Package Control has them, so we do too.
 
 This installs only one command "Package x Control: Dashboard".  Open the
 dashboard and you will see all packages that you have on your system.
+
+![](shot-of-the-board.png)
+
 Initially all packages are either unmanaged packages or under the section
 "PACKAGES BY PACKAGE CONTROL".  But this very add-on implements a third
 way to install packages; it is not just an UI for the same thing.
