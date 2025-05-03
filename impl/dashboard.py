@@ -324,7 +324,7 @@ class pxc_update_package(sublime_plugin.TextCommand):
         for package in get_selected_packages(view):
             package_info = grab_package_info_by_name(package)
             if not package_info:
-                view.show_popup("[u] is only implemented for INSTALLED PACKAGES")
+                view.show_popup("[u] is only implemented for INSTALLED PACKAGES at the moment")
                 continue
 
             if not package_info["update_available"]:
