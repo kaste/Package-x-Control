@@ -38,9 +38,9 @@ releases or tags subsite, and look at a previous tag.  Grab the URL
 https://github.com/braver/Solarized/releases/tag/3.0.1
 ```
 
-and paste it again.
+and paste it again.  Got it?  🤞😏
 
-Got it?  🤞
+This also works for URLs pointing at a pull request.
 
 
 ## Goals
