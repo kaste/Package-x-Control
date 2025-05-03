@@ -373,7 +373,6 @@ class pxc_remove_package(sublime_plugin.TextCommand):
 
         for package in get_selected_packages(view):
             result = find_by_name(package)
-            print("result", result, package)
             if result is None:
                 view.show_popup(f"Can only remove installed packages, and {package} is not.")
                 continue
