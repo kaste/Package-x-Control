@@ -75,4 +75,8 @@ Ideally, release notes from Github could be used in addition to "messages.json".
 These notes can be edited so I can fix my typos without making a new release.
 
 
+## Uninstall
 
+If you want to keep the installed packages, copy the package names to your
+Package Control settings under `installed_packages`.  Then just delete this
+package as always.
