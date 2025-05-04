@@ -40,6 +40,7 @@ class GitInstallablePackage(TypedDict, total=False):
 PackageControlEntry: TypeAlias = "ProprietaryPackage | GitInstallablePackage"
 PackageDb: TypeAlias = "dict[str, PackageControlEntry]"
 
+CACHE_TIME = 600
 MAX_WORKERS = 16
 
 packages: PackageDb
@@ -179,7 +180,7 @@ def load_cached_packages(cache_file: str, log: LogWriter) -> tuple[PackageDb, fl
     try:
         with open(cache_file_meta, 'r', encoding='utf-8') as f:
             timestamp = int(f.read())
-        if time.time() - timestamp > 600:  # 10 minutes
+        if time.time() - timestamp > CACHE_TIME:  # 10 minutes
             return None
         with open(cache_file, 'r', encoding='utf-8') as f:
             return json.load(f), timestamp
