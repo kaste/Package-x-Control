@@ -1043,6 +1043,15 @@ def refresh_unmanaged_packages(state: State, set_state: StateSetter):
     ]
     set_state({"unmanaged_packages": packages})
 
+    def fetch_package_info(package_name: str) -> PackageInfo:
+        return {
+            "name": package_name,
+            # That's a lie, these are all checked out, but we
+            # don't want to show that explicitly in the UI.
+            "checked_out": False,
+            **current_version_of_git_repo(os.path.join(PACKAGES_PATH, package_name))
+        }
+
     for f in as_completed([
         worker.add_task(package_name, fetch_package_info, package_name)
         for package_name in unmanaged_packages
@@ -1054,14 +1063,6 @@ def refresh_unmanaged_packages(state: State, set_state: StateSetter):
                 packages[i] = info
                 break
         set_state({"unmanaged_packages": packages})
-
-
-def fetch_package_info(package_name: str) -> PackageInfo:
-    return {
-        "name": package_name,
-        "checked_out": False,
-        **current_version_of_git_repo(os.path.join(PACKAGES_PATH, package_name))
-    }
 
 
 def current_version_of_git_repo(repo_path: str) -> dict:
