@@ -2,11 +2,13 @@ from __future__ import annotations
 from collections import deque
 from concurrent.futures import Future
 from datetime import datetime
+from functools import lru_cache
 import threading
 
-from typing import Callable, Generic, Iterable, TypeVar, overload
-from typing_extensions import ParamSpec
+from typing import Any, Callable, Generic, Iterable, Sequence, TypeVar, overload
+from typing_extensions import ParamSpec, TypeAlias
 
+import sublime
 
 P = ParamSpec("P")
 T = TypeVar("T")
@@ -211,3 +213,75 @@ def future(val: T) -> Future[T]:
     f: Future[T] = Future()
     f.set_result(val)
     return f
+
+
+ValueCallback = Callable[[str], None]
+CancelCallback = Callable[[], None]
+
+
+def show_input_panel(
+    window: sublime.Window,
+    caption: str,
+    initial_text: str,
+    on_done: ValueCallback,
+    on_change: ValueCallback | None = None,
+    on_cancel: CancelCallback | None = None,
+    select_text: bool = True
+) -> sublime.View:
+    v = window.show_input_panel(caption, initial_text, on_done, on_change, on_cancel)
+    if select_text:
+        v.run_command("select_all")
+    return v
+
+
+ActionType: TypeAlias = "tuple[str, Callable[[], Any]]"
+QuickPanelItems: TypeAlias = "Iterable[str | sublime.QuickPanelItem]"
+
+
+def show_panel(
+    window,  # type: sublime.Window
+    items,  # type: QuickPanelItems
+    on_done,  # type: Callable[[int], None]
+    on_cancel=lambda: None,  # type: Callable[[], None]
+    on_highlight=lambda _: None,  # type: Callable[[int], None]
+    selected_index=-1,  # type: int
+    flags=sublime.MONOSPACE_FONT
+):
+    # (...) -> None
+    def _on_done(idx):
+        # type: (int) -> None
+        if idx == -1:
+            on_cancel()
+        else:
+            on_done(idx)
+
+    # `on_highlight` also gets called `on_done`. We
+    # reduce the side-effects here using `lru_cache`.
+    @lru_cache(1)
+    def _on_highlight(idx):
+        # type: (int) -> None
+        on_highlight(idx)
+
+    window.show_quick_panel(
+        list(items),
+        _on_done,
+        on_highlight=_on_highlight,
+        selected_index=selected_index,
+        flags=flags
+    )
+
+
+def show_actions_panel(
+    window: sublime.Window, actions: Sequence[ActionType], select: int = -1
+) -> None:
+    def on_selection(idx):
+        # type: (int) -> None
+        description, action = actions[idx]
+        action()
+
+    show_panel(
+        window,
+        (action[0] for action in actions),
+        on_selection,
+        selected_index=select
+    )

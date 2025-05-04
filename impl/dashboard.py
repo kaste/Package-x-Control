@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import deque
 from concurrent.futures import as_completed, Future, TimeoutError
 from datetime import datetime, timezone
+from functools import partial
 from itertools import chain
 import os
 from textwrap import wrap
@@ -43,7 +44,8 @@ from .glue_code import (
 from .pc_repository import extract_name_from_url, fetch_packages, PackageDb, PackageControlEntry
 from .runtime import on_ui, on_worker
 from .utils import (
-    drop_falsy, format_items, future, human_date, remove_prefix, remove_suffix
+    drop_falsy, format_items, future, human_date, remove_prefix, remove_suffix,
+    show_actions_panel, show_input_panel
 )
 from . import worker
 
@@ -225,6 +227,8 @@ class pxc_install_package(sublime_plugin.TextCommand):
     @on_worker
     def run(self, edit, name: str = None):
         view = self.view
+        window = view.window()
+        assert window
 
         try:
             state["initial_fetch_of_package_control_io"].result(0.5)
@@ -325,13 +329,27 @@ class pxc_install_package(sublime_plugin.TextCommand):
                     package_control_entry["name"]
                 )
         elif url:
-            package_entry = {
+            def install_from_git(package_entry: PackageConfiguration, new_name: str = None):
+                if new_name:
+                    package_entry["name"] = new_name
+                worker.add_task("package_control_fx", install_package_fx_, package_entry)
+
+            kont = partial(install_from_git, {
                 "name": final_name,
                 "url": url,
                 "refs": refs or "tags/*",
                 "unpacked": False
-            }
-            worker.add_task("package_control_fx", install_package_fx_, package_entry)
+            })
+            show_actions_panel(window, [
+                (
+                    f"Install {final_name}",
+                    kont
+                ),
+                (
+                    "Enter a different name for the package",
+                    lambda: show_input_panel(window, "Name:", final_name, kont)
+                )
+            ])
         else:
             truncated_name = (name[:67] + "...") if len(name) > 70 else name
             view.show_popup(
@@ -400,7 +418,6 @@ class pxc_remove_package(sublime_plugin.TextCommand):
             message = f"Removed {name}."
             state["status_messages"].append(message)
             refresh()
-
 
         for package in get_selected_packages(view):
             result = find_by_name(package)
