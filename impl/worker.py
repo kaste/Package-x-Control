@@ -10,7 +10,7 @@ import traceback
 from typing import Callable, TypeVar, Generic, Optional, Any
 from typing_extensions import ParamSpec, TypeAlias
 
-from .runtime import assert_it_runs_on_worker, ensure_on_worker, run_on_worker
+from .runtime import assert_it_runs_on_worker, run_on_worker
 import sublime
 
 

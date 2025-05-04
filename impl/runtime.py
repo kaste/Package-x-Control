@@ -39,7 +39,7 @@ def assert_it_runs_on_worker() -> None:
         raise RuntimeError("MUST run on worker")
 
 
-def on_worker(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> None:
+def ensure_on_worker(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> None:
     if it_runs_on_worker():
         fn(*args, **kwargs)
     else:
@@ -50,10 +50,10 @@ def run_on_worker(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> None
     sublime.set_timeout_async(partial(fn, *args, **kwargs))
 
 
-def ensure_on_worker(fn: Callable[P, T]) -> Callable[P, None]:
+def on_worker(fn: Callable[P, T]) -> Callable[P, None]:
     @wraps(fn)
     def wrapped(*a: P.args, **kw: P.kwargs) -> None:
-        on_worker(fn, *a, **kw)
+        ensure_on_worker(fn, *a, **kw)
     return wrapped
 
 
@@ -61,7 +61,7 @@ def it_runs_on_ui() -> bool:
     return threading.current_thread().name == UI_THREAD_NAME
 
 
-def on_ui(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> None:
+def ensure_on_ui(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> None:
     if it_runs_on_ui():
         fn(*args, **kwargs)
     else:
@@ -72,11 +72,11 @@ def run_on_ui(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> None:
     sublime.set_timeout(partial(fn, *args, **kwargs))
 
 
-def ensure_on_ui(fn):
+def on_ui(fn):
     # type: (Callable[P, T]) -> Callable[P, None]
     @wraps(fn)
     def wrapped(*a: P.args, **kw: P.kwargs) -> None:
-        on_ui(fn, *a, **kw)
+        ensure_on_ui(fn, *a, **kw)
     return wrapped
 
 

@@ -40,7 +40,7 @@ from .glue_code import (
     remove_package_by_name, remove_proprietary_package_by_name
 )
 from .pc_repository import extract_name_from_url, fetch_packages, PackageDb, PackageControlEntry
-from .runtime import ensure_on_ui
+from .runtime import on_ui
 from .utils import (
     drop_falsy, format_items, human_date, remove_prefix, remove_suffix
 )
@@ -126,7 +126,7 @@ state: State = {
 }
 
 
-@ensure_on_ui
+@on_ui
 def set_state(partial_state: State):
     state.update(partial_state)
     render_visible_dashboards()
@@ -897,7 +897,7 @@ StateSetter: TypeAlias = Callable[[State], None]
 
 
 def fetch_registered_packages(state: State, set_state: StateSetter):
-    @ensure_on_ui
+    @on_ui
     def printer(message: str):
         d = state["status_messages"]
         d.append(message)
