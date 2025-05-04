@@ -10,7 +10,7 @@ import traceback
 from typing import Callable, TypeVar, Generic, Optional, Any
 from typing_extensions import ParamSpec, TypeAlias
 
-from .runtime import assert_it_runs_on_worker, run_on_worker
+from .runtime import assert_it_runs_on_ui, run_on_ui
 import sublime
 
 
@@ -64,13 +64,13 @@ def add_task(topic: str, fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) 
 
 def add(topic: str, fn: Callable[[], T]) -> Future[T]:
     task = TopicTask(topic, fn)
-    run_on_worker(_add, task)
+    run_on_ui(_add, task)
     return task.future
 
 
 def _add(task: TopicTask):
     global queue, running_topics
-    assert_it_runs_on_worker()
+    assert_it_runs_on_ui()
 
     if task.topic not in running_topics and (worker := get_idle_worker()):
         schedule(worker, task)
@@ -80,7 +80,7 @@ def _add(task: TopicTask):
 
 def _tick(w, task):
     global queue, running_topics
-    assert_it_runs_on_worker()
+    assert_it_runs_on_ui()
 
     running_topics.discard(task.topic)
     for task in queue:
@@ -94,14 +94,14 @@ def _tick(w, task):
 
 def _cancel_topic(topic: str):
     global queue
-    assert_it_runs_on_worker()
+    assert_it_runs_on_ui()
 
     queue = [task for task in queue if task.topic != topic]
 
 
 def _did_shutdown(w):
     global running_workers
-    assert_it_runs_on_worker()
+    assert_it_runs_on_ui()
 
     try:
         running_workers.remove(w)
@@ -155,13 +155,13 @@ class Worker(threading.Thread):
                     print("Exception in worker", task, e)
                     traceback.print_exc()
                     task.future.set_exception(e)
-                    run_on_worker(_cancel_topic, task.topic)
+                    run_on_ui(_cancel_topic, task.topic)
                 finally:
-                    run_on_worker(_tick, self, task)
+                    run_on_ui(_tick, self, task)
         except Empty:
             pass
         finally:
-            run_on_worker(_did_shutdown, self)
+            run_on_ui(_did_shutdown, self)
 
 
 manager: Manager | None = None
