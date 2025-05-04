@@ -70,13 +70,12 @@ def fetch_packages(
     results: dict[str, dict] = {}
 
     num_threads = min(MAX_WORKERS, len(repos))
-    with ActivityIndicator('Fetching packagecontrol.io...'):
-        with ThreadPoolExecutor(max_workers=num_threads) as executor:
-            futures = [
-                executor.submit(drain_queue, manager.settings, urls_to_fetch, results, log)
-                for _ in range(num_threads)
-            ]
-            wait(futures, timeout=60)
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        futures = [
+            executor.submit(drain_queue, manager.settings, urls_to_fetch, results, log)
+            for _ in range(num_threads)
+        ]
+        wait(futures, timeout=60)
 
     # Collect the results
     # The main repo is the first one.  Run reversed so that others

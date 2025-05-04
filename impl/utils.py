@@ -1,5 +1,6 @@
 from __future__ import annotations
 from collections import deque
+from concurrent.futures import Future
 from datetime import datetime
 import threading
 
@@ -204,3 +205,9 @@ def format_items(items: list[str], sep: str = ", ", last_sep: str = " and ") -> 
     if len(items) == 1:
         return items[0]
     return f"{sep.join(items[:-1])}{last_sep}{items[-1]}"
+
+
+def future(val: T) -> Future[T]:
+    f: Future[T] = Future()
+    f.set_result(val)
+    return f

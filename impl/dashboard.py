@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
-from concurrent.futures import as_completed
+from concurrent.futures import as_completed, Future, TimeoutError
 from datetime import datetime, timezone
 from itertools import chain
 import os
@@ -19,6 +19,7 @@ from typing_extensions import TypeAlias
 import sublime
 import sublime_plugin
 
+from package_control.activity_indicator import ActivityIndicator
 from package_control.package_manager import PackageManager
 
 from .config import (
@@ -40,9 +41,9 @@ from .glue_code import (
     remove_package_by_name, remove_proprietary_package_by_name
 )
 from .pc_repository import extract_name_from_url, fetch_packages, PackageDb, PackageControlEntry
-from .runtime import on_ui
+from .runtime import on_ui, on_worker
 from .utils import (
-    drop_falsy, format_items, human_date, remove_prefix, remove_suffix
+    drop_falsy, format_items, future, human_date, remove_prefix, remove_suffix
 )
 from . import worker
 
@@ -81,6 +82,7 @@ class State(TypedDict, total=False):
     disabled_packages: list[str]  # List of package names that are disabled
     status_messages: deque[str]  # For messages at the bottom
     registered_packages: PackageDb
+    initial_fetch_of_package_control_io: Future
 
 
 # Configuration object for dashboard formatting
@@ -115,6 +117,7 @@ RESERVED_PACKAGES = {
     'Binary', 'Default', 'Text', 'User', 'Package Control',
     'Package x Control',
 }
+NullFuture = future(None)
 dashboard_views: set[sublime.View] = set()
 state: State = {
     "installed_packages": [],
@@ -122,7 +125,8 @@ state: State = {
     "unmanaged_packages": [],
     "disabled_packages": [],
     "status_messages": deque([], 10),
-    "registered_packages": {}
+    "registered_packages": {},
+    "initial_fetch_of_package_control_io": NullFuture
 }
 
 
@@ -218,8 +222,34 @@ class pxc_listener(sublime_plugin.EventListener):
 
 
 class pxc_install_package(sublime_plugin.TextCommand):
+    @on_worker
     def run(self, edit, name: str = None):
         view = self.view
+
+        try:
+            state["initial_fetch_of_package_control_io"].result(0.5)
+        except TimeoutError:
+            with ActivityIndicator() as progress:
+                for msg, timeout in (
+                    ("Waiting for packagecontrol.io...", 10.0),
+                    ("🙄...", 4.0),
+                    ("😐...", 3.0),
+                    ("🤔...", 2.0),
+                    ("😒...", 10.0),
+                ):
+                    progress.set_label(msg)
+                    try:
+                        state["initial_fetch_of_package_control_io"].result(timeout)
+                    except TimeoutError:
+                        pass
+                    else:
+                        break
+                else:
+                    print(
+                        "Could not fetch packagecontrol repository.  This is technically "
+                        "not required but helps with configuring the right refs and custom "
+                        "package names.  Continue anyway."
+                    )
         registered_packages = state["registered_packages"]
 
         if name is None:
@@ -886,7 +916,9 @@ def refresh() -> None:
     """Fetches the latest state (if necessary) and renders the view."""
     global state
     fast_state(state, set_state)
-    worker.add_task("fetch_packages", fetch_registered_packages, state, set_state)
+    f = worker.add_task("fetch_packages", fetch_registered_packages, state, set_state)
+    if state["initial_fetch_of_package_control_io"] is NullFuture:
+        set_state({"initial_fetch_of_package_control_io": f})
     worker.add_task("refresh_disabled_packages", refresh_disabled_packages, state, set_state)
     worker.add_task("refresh_our_packages", refresh_our_packages, state, set_state)
     worker.add_task("refresh_installed_packages", refresh_installed_packages, state, set_state)
