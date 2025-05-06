@@ -8,8 +8,9 @@ Note the spaces in the name!  Package Control has them, so we do too.
 
 ##
 
-This installs only one command "Package x Control: Dashboard".  Open the
-dashboard and you will see all packages that you have on your system.
+The package is not hostile and installs only one command: "Package x Control:
+Dashboard".  Open the dashboard using the command palette and you will see all
+packages that you have on your system.
 
 ![](shot-of-the-board.png)
 
@@ -40,7 +41,7 @@ https://github.com/braver/Solarized/releases/tag/3.0.1
 
 and paste it again.  Got it?  🤞😏
 
-This also works for URLs pointing at a pull request.
+This also works for URLs pointing at a pull request.  Or forks.
 
 
 ## Goals
