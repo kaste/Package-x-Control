@@ -740,9 +740,11 @@ def format_package_wide(
         # Determine update prefix text based on version type
         indent = "".ljust(config.INDENT_WIDTH)
         update_prefix = (
+            " ` install available"
+            if not ver else
             " ` new version available"
-            if update_ver.kind == 'tag'
-            else " ` update available"
+            if update_ver.kind == 'tag' else
+            " ` update available"
         )
         name_column = update_prefix.ljust(actual_name_width)
 
@@ -997,7 +999,8 @@ def refresh_our_packages(state: State, set_state: StateSetter):
             else:
                 return {
                     "name": package_name,
-                    "checked_out": False
+                    "checked_out": False,
+                    **installable_version_from_git_repo(entry)
                 }
 
         return {
@@ -1126,9 +1129,19 @@ def current_version_of_git_repo(repo_path: str) -> dict:
 
 
 def new_version_from_git_repo(entry: PackageConfiguration) -> dict:
+    return next_version_from_git_repo(entry, lambda i: i["status"] == "needs-update")
+
+
+def installable_version_from_git_repo(entry: PackageConfiguration) -> dict:
+    return next_version_from_git_repo(entry, lambda i: i["status"] != "no-suitable-version-found")
+
+
+def next_version_from_git_repo(
+    entry: PackageConfiguration, predicate: Callable[[UpdateInfo], bool]
+) -> dict:
     git = ensure_repository(entry, ROOT_DIR, GitCallable)
     info = check_for_updates(entry["refs"], BUILD, git)
-    if info["status"] == "needs-update":
+    if predicate(info):
         return {"update_available": git_version_to_description(info["version"], git)}
     else:
         return {}
