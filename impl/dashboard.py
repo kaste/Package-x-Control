@@ -24,15 +24,15 @@ from package_control.activity_indicator import ActivityIndicator
 from package_control.package_manager import PackageManager
 
 from .config import (
-    BUILD, PACKAGE_CONTROL_PREFERENCES, PACKAGES_PATH, PLATFORM,
-    ROOT_DIR, SUBLIME_PREFERENCES
+    BUILD, BACKUP_DIR, INSTALLED_PACKAGES_PATH, PACKAGE_CONTROL_PREFERENCES,
+    PACKAGES_PATH, PLATFORM, ROOT_DIR, SUBLIME_PREFERENCES
 )
 from .config_management import (
     PackageConfiguration,
     extract_repo_name, get_configuration, process_config
 )
 from .git_package import (
-    GitCallable, Version,
+    GitCallable, UpdateInfo, Version,
     check_for_updates, ensure_repository, describe_current_commit, get_commit_date,
     repo_is_valid
 )
@@ -45,7 +45,7 @@ from .pc_repository import extract_name_from_url, fetch_packages, PackageDb, Pac
 from .runtime import it_runs_on_ui, on_ui, run_on_worker
 from .utils import (
     drop_falsy, format_items, future, human_date, remove_prefix, remove_suffix,
-    show_actions_panel, show_input_panel
+    rmfile, rmtree, show_actions_panel, show_input_panel
 )
 from . import worker
 
@@ -56,6 +56,7 @@ __all__ = (
     "pxc_install_package",
     "pxc_update_package",
     "pxc_remove_package",
+    "pxc_check_out_package",
     "pxc_toggle_disable_package",
     "pxc_open_packagecontrol_io",
     "pxc_render",
@@ -437,6 +438,126 @@ class pxc_remove_package(sublime_plugin.TextCommand):
                 worker.add_task("package_control_fx", remove_proprietary_package_fx_, info["name"])
             else:
                 raise RuntimeError("this else should be unreachable")
+
+
+class pxc_check_out_package(sublime_plugin.TextCommand):
+    def run(self, edit):
+        view = self.view
+        window = view.window()
+        assert window
+
+        installed_packages = state["installed_packages"]
+        package_controlled_packages = state["package_controlled_packages"]
+
+        def find_by_name(name: str) -> tuple[str, PackageInfo] | None:
+            for section, pkgs in [
+                ("controlled_by_us", installed_packages),
+                ("controlled_by_pc", package_controlled_packages)
+            ]:
+                for info in pkgs:
+                    if info["name"] == name:
+                        return section, info
+            return None
+
+        def checkout_package_fx_(name: str, git_url: str):
+            target_dir = os.path.join(PACKAGES_PATH, name)
+            if os.path.exists(target_dir):
+                pm = PackageManager()
+                if not pm.backup_package_dir(name):
+                    view.show_popup(
+                        "fatal: the target dir already exists and could not be backed up."
+                    )
+                    return
+                print(f"{name} backed up into {BACKUP_DIR}")
+
+                if not rmtree(target_dir):
+                    view.show_popup(
+                        "fatal: the target dir could not be removed."
+                    )
+                    return
+
+            if window.folders() or len(window.views()) > 1:
+                target_window = open_new_window()
+            else:
+                target_window = window
+            clone_package_to_window(target_window, git_url, target_dir)
+
+            package_file = os.path.join(INSTALLED_PACKAGES_PATH, f"{name}.sublime-package")
+            if os.path.exists(package_file):
+                if not rmfile(package_file):
+                    print("Failed to remove {package_file}.  Should work anyway.")
+
+            message = f"Unpacked {name}."
+            state["status_messages"].append(message)
+            refresh()
+
+        config_data = get_configuration()
+        entries = process_config(config_data)
+        for package in get_selected_packages(view):
+            result = find_by_name(package)
+            if result is None:
+                view.show_popup(
+                    f"Can only remove check out managed packages, and {package} is not."
+                )
+                continue
+            section, info = result
+            if info["checked_out"]:
+                view.show_popup(f"{package} is already checked out.")
+                continue
+
+            if section == "controlled_by_us":
+                for entry in entries:
+                    if entry["name"] == package:
+                        worker.add_task(
+                            "package_control_fx",
+                            checkout_package_fx_,
+                            package,
+                            entry["url"]
+                        )
+                        break
+                else:
+                    print(f"fatal: {package} not found in the PxC-settings")
+                    view.show_popup(f"Huh?  {package} not found in the PxC-settings")
+                    continue
+            elif section == "controlled_by_pc":
+                registered_packages = state["registered_packages"]
+                package_control_entry = registered_packages.get(package)
+                if not package_control_entry:
+                    view.show_popup(f"fatal: {package} not found in the package registry.")
+                    continue
+                elif "git_url" not in package_control_entry:
+                    view.show_popup(
+                        f"fatal: {package} is proprietary and I don't have a git url for it."
+                    )
+                    continue
+                else:
+                    worker.add_task(
+                        "package_control_fx",
+                        checkout_package_fx_,
+                        package,
+                        package_control_entry["git_url"]  # type: ignore[typeddict-item]
+                    )
+            else:
+                raise RuntimeError("this else should be unreachable")
+
+
+def clone_package_to_window(window, git_url: str, target_dir: str):
+    with ActivityIndicator("Cloning package") as progress:
+        git = GitCallable(".")
+        git("clone", git_url, target_dir)
+        # Set this late to ensure `target_dir` actually exists
+        window.set_project_data({
+            "folders": [dict(follow_symlinks=True, path=target_dir)]
+        })
+        progress.set_label("Cloned repo successfully.")
+        if not window.is_sidebar_visible():
+            window.run_command("toggle_side_bar")
+
+
+def open_new_window():
+    # type: () -> sublime.Window
+    sublime.run_command("new_window")
+    return sublime.active_window()
 
 
 class pxc_toggle_disable_package(sublime_plugin.TextCommand):

@@ -44,6 +44,13 @@
         ]
     },
     {
+        "keys": ["U"],
+        "command": "pxc_check_out_package",
+        "context": [
+            { "key": "setting.pxc_dashboard" },
+        ]
+    },
+    {
         "keys": ["ctrl+backspace"],
         "command": "pxc_remove_package",
         "context": [

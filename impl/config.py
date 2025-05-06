@@ -5,6 +5,7 @@ import sublime
 INSTALLED_PACKAGES_PATH = sublime.installed_packages_path()
 PACKAGES_PATH = sublime.packages_path()
 CACHE_PATH = sublime.cache_path()
+BACKUP_DIR = os.path.join(os.path.dirname(INSTALLED_PACKAGES_PATH), "Backup")
 BUILD = int(sublime.version())
 PLATFORM = f"{sublime.platform()}-{sublime.arch()}"
 

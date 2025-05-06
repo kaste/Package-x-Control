@@ -3,6 +3,9 @@ from collections import deque
 from concurrent.futures import Future
 from datetime import datetime
 from functools import lru_cache
+import os
+import shutil
+import stat
 import threading
 
 from typing import Any, Callable, Generic, Iterable, Sequence, TypeVar, overload
@@ -285,3 +288,23 @@ def show_actions_panel(
         on_selection,
         selected_index=select
     )
+
+
+def rmtree(target_dir: str) -> bool:
+    def remove_readonly_bit_and_retry(func, path, exc_info):
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except OSError:
+            pass
+
+    shutil.rmtree(target_dir, onerror=remove_readonly_bit_and_retry)
+    return not os.path.exists(target_dir)
+
+
+def rmfile(target_file: str) -> bool:
+    try:
+        os.remove(target_file)
+    except OSError:
+        pass
+    return not os.path.exists(target_file)
