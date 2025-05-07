@@ -299,8 +299,9 @@ class pxc_install_package(sublime_plugin.TextCommand):
 
         def lookup_by_encoded_name_in_url(name: str) -> PackageControlEntry | None:
             for p in registered_packages.values():
-                if extract_name_from_url(p.get("git_url")) == name:  # type: ignore[arg-type]
-                    return p
+                if "git_url" in p:
+                    if extract_name_from_url(p["git_url"]) == name:  # type: ignore[typeddict-item]
+                        return p
             return None
 
         if url := parse_url_from_user_input(name):
