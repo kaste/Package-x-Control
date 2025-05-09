@@ -26,3 +26,7 @@ ROOT_DIR = os.path.join(CACHE_PATH, PACKAGE)
 PACKAGES_CACHE = os.path.join(ROOT_DIR, "packages.json")
 PACKAGES_REPOSITORY = os.path.join(ROOT_DIR, "repository.json")
 PACKAGE_CONTROL_OVERRIDE = os.path.join(PACKAGES_PATH, PACKAGE, "Package Control.sublime-settings")
+REGISTRY_URL = (
+    "https://github.com/kaste/Package-x-Control/"
+    "releases/download/registry-latest/registry.json"
+)

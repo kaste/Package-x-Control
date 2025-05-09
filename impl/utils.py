@@ -1,14 +1,12 @@
 from __future__ import annotations
-from collections import deque
 from concurrent.futures import Future
 from datetime import datetime
 from functools import lru_cache
 import os
 import shutil
 import stat
-import threading
 
-from typing import Any, Callable, Generic, Iterable, Sequence, TypeVar, overload
+from typing import Any, Callable, Iterable, Sequence, TypeVar, overload
 from typing_extensions import ParamSpec, TypeAlias
 
 import sublime
@@ -54,64 +52,6 @@ def remove_suffix(s: str, suffix: str) -> str:
 
 def remove_lr(s: str, left: str, right: str) -> str:
     return remove_suffix(remove_prefix(s, left), right)
-
-
-class _DedupQueue(Generic[T]):
-    def __init__(self, items: Iterable[T] | None = None) -> None:
-        self._queue: deque[T] = deque()
-        self._seen: set[T] = set()
-        if items:
-            self.extend(items)
-
-    def append(self, item: T) -> None:
-        if item not in self._seen:
-            self._seen.add(item)
-            self._queue.append(item)
-
-    def extend(self, items: Iterable[T]) -> None:
-        unseen = [item for item in items if item not in self._seen]
-        self._seen.update(unseen)
-        self._queue.extend(unseen)
-
-    def pop(self) -> T:
-        return self._queue.pop()
-
-    def popleft(self) -> T:
-        return self._queue.popleft()
-
-
-class _DedupQueueL(_DedupQueue[T]):
-    def __init__(self, items: Iterable[T] | None = None) -> None:
-        self._lock = threading.Lock()
-        super().__init__(items)
-
-    def append(self, item: T) -> None:
-        with self._lock:
-            super().append(item)
-
-    def extend(self, items: Iterable[T]) -> None:
-        with self._lock:
-            super().extend(items)
-
-    def pop(self) -> T:
-        return self._queue.pop()
-
-    def popleft(self) -> T:
-        return self._queue.popleft()
-
-
-class DedupQueue(Generic[T]):
-    """A deduplicating queue, optionally thread safe."""
-    def __new__(self, items: Iterable[T] | None = None, thread_safe: bool = False):
-        return _DedupQueueL(items) if thread_safe else _DedupQueue(items)
-
-    def __init__(                                      # noqa: E704
-        self, items: Iterable[T] | None = None, thread_safe: bool = False
-    ): ...
-    def append(self, item: T) -> None: ...             # noqa: E704
-    def extend(self, items: Iterable[T]) -> None: ...  # noqa: E704
-    def pop(self) -> T: ...                            # type: ignore[empty-body]  # noqa: E704
-    def popleft(self) -> T: ...                        # type: ignore[empty-body]  # noqa: E704
 
 
 def human_date(ts: float, now_ts: float | None = None) -> str:

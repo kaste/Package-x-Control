@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, wait
 import json
 import os
 import re
@@ -8,24 +7,11 @@ import time
 import urllib.error
 import urllib.request
 
-from typing import Callable, TypedDict, TypeVar
-from typing_extensions import NotRequired, ParamSpec, Required, TypeAlias
+from typing import Callable, TypedDict
+from typing_extensions import Required, TypeAlias
 
-import sublime
-import sublime_plugin
-
-from package_control.activity_indicator import ActivityIndicator
-from package_control.package_manager import PackageManager
-from package_control.download_manager import http_get, resolve_urls
-from package_control.providers import ChannelProvider
-from .config import BUILD, DEFAULT_CHANNEL, PACKAGES_CACHE, PLATFORM
-from .utils import DedupQueue, format_items
-
-
-P = ParamSpec("P")
-T = TypeVar("T")
-T_co = TypeVar("T_co", covariant=True)
-LogWriter: TypeAlias = Callable[[str], None]
+from .config import PACKAGES_CACHE, REGISTRY_URL
+from .utils import format_items
 
 
 class ProprietaryPackage(TypedDict, total=False):
@@ -38,17 +24,11 @@ class GitInstallablePackage(TypedDict, total=False):
     refs: Required[str]
 
 
+LogWriter: TypeAlias = Callable[[str], None]
 PackageControlEntry: TypeAlias = "ProprietaryPackage | GitInstallablePackage"
 PackageDb: TypeAlias = "dict[str, PackageControlEntry]"
-
+packages: PackageDb = {}
 CACHE_TIME = 600
-MAX_WORKERS = 16
-
-packages: PackageDb
-try:
-    packages
-except NameError:
-    packages = {}
 
 
 def fetch_packages(
@@ -64,37 +44,12 @@ def fetch_packages(
         return packages
 
     log("Fetching registered packages from packagecontrol.io")
-    manager = PackageManager()
     now = time.monotonic()
-    provider = ChannelProvider(DEFAULT_CHANNEL, manager.settings)
-    repos: list[str] = provider.get_repositories()
-    urls_to_fetch = DedupQueue(repos, thread_safe=True)
-    results: dict[str, dict] = {}
 
-    num_threads = min(MAX_WORKERS, len(repos))
-    with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        futures = [
-            executor.submit(drain_queue, manager.settings, urls_to_fetch, results, log)
-            for _ in range(num_threads)
-        ]
-        wait(futures, timeout=60)
-
-    # Collect the results
-    # The main repo is the first one.  Run reversed so that others
-    # can't override it.
-    urls_ordered = DedupQueue(reversed(repos))
-    packages_ = []
-    while True:
-        try:
-            url = urls_ordered.pop()
-        except IndexError:
-            break
-        result = results[url]
-        packages_.extend(result["packages"])
-        for include in reversed(result["includes"]):
-            urls_ordered.append(include)
-
+    json_string = http_get_(REGISTRY_URL)
+    packages_ = json.loads(json_string)
     log(f"{len(packages_)} packages in total.")
+
     packages = prepare_packages_data(packages_, build, platform, log)
     elapsed = time.monotonic() - now
     log(f"Prepared packages in {elapsed:.2f} seconds.")
@@ -102,45 +57,9 @@ def fetch_packages(
     return packages
 
 
-def drain_queue(
-    manager_settings,
-    urls_to_fetch: DedupQueue[str],
-    results: dict[str, dict],
-    log: LogWriter,
-) -> None:
-    while True:
-        try:
-            location = urls_to_fetch.popleft()
-        except IndexError:
-            break
-
-        try:
-            result = fetch_repo(location, manager_settings, log)
-            urls_to_fetch.extend(result["includes"])
-        except Exception as e:
-            result = {"packages": [], "includes": []}
-            log(f"Error fetching {location}: {e}")
-        finally:
-            results[location] = result
-
-
-def fetch_repo(location: str, manager_settings, log: LogWriter) -> dict:
-    json_string = http_get_(manager_settings, location)
-    repo_info = json.loads(json_string)
-    repo_info["includes"] = list(resolve_urls(
-        location, repo_info.get("includes", [])
-    ))
-    return repo_info
-
-
-def http_get_(manager_settings, location: str) -> str:
-    try:
-        with urllib.request.urlopen(location) as response:
-            return response.read().decode('utf-8')
-    except urllib.error.HTTPError as e:
-        if e.code == 403:
-            return http_get(location, manager_settings).decode('utf-8')
-        raise
+def http_get_(location: str) -> str:
+    with urllib.request.urlopen(location) as response:
+        return response.read().decode('utf-8')
 
 
 def prepare_packages_data(
