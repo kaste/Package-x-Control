@@ -48,11 +48,13 @@ def boot():
     # Ensure our repository is registered
     s = sublime.load_settings(PACKAGE_CONTROL_PREFERENCES)
     repositories = s.get("repositories", [])
+    modified = False
     if PACKAGES_REPOSITORY not in repositories:
+        modified = True
         repositories.append(PACKAGES_REPOSITORY)
-    s.set("repositories", repositories)
-    # Do we actually need to save the settings?
-    # sublime.save_settings(PACKAGE_CONTROL_PREFERENCES)
+    if modified:
+        s.set("repositories", repositories)
+        sublime.save_settings(PACKAGE_CONTROL_PREFERENCES)
 
     # Delay monkey-patching or it won't work.
     # Must be something with PC doing its own boot delayed.
