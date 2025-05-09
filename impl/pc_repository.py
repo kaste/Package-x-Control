@@ -5,6 +5,7 @@ import json
 import os
 import re
 import time
+import urllib.error
 import urllib.request
 
 from typing import Callable, TypedDict, TypeVar
@@ -124,20 +125,22 @@ def drain_queue(
 
 
 def fetch_repo(location: str, manager_settings, log: LogWriter) -> dict:
-    now = time.monotonic()
-    if re.match(r"https?://", location, re.I):
-        json_string = http_get(location, manager_settings)
-    else:
-        with open(location, "rb") as f:
-            json_string = f.read()
-
-    repo_info = json.loads(json_string.decode("utf-8"))
+    json_string = http_get_(manager_settings, location)
+    repo_info = json.loads(json_string)
     repo_info["includes"] = list(resolve_urls(
         location, repo_info.get("includes", [])
     ))
-    elapsed = time.monotonic() - now
-    # log(f"Fetched {location} in {elapsed:.2f} seconds.")
     return repo_info
+
+
+def http_get_(manager_settings, location: str) -> str:
+    try:
+        with urllib.request.urlopen(location) as response:
+            return response.read().decode('utf-8')
+    except urllib.error.HTTPError as e:
+        if e.code == 403:
+            return http_get(location, manager_settings).decode('utf-8')
+        raise
 
 
 def prepare_packages_data(
