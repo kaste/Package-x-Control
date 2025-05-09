@@ -1,0 +1,81 @@
+name: Publish Registry.json Asset
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: registry-latest
+  ASSET_NAME: registry.json
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Generate registry.json
+        run: python scripts/generate_registry.py
+
+      - name: Compute local MD5 "ETag"
+        id: hash
+        run: |
+          hash=$(md5sum registry.json | cut -d ' ' -f1)
+          echo "etag=\"${hash}\"" >> $GITHUB_OUTPUT
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Create or update release
+          gh release view ${{ env.RELEASE_TAG }} || \
+          gh release create ${{ env.RELEASE_TAG }} \
+            --title "Registry Latest" \
+            --notes "Latest registry.json" \
+            --latest
+
+      - name: Check for existing asset
+        id: find_asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          asset_id=$(gh api \
+            repos/${{ github.repository }}/releases/tags/${{ env.RELEASE_TAG }} \
+            --jq '.assets[] | select(.name=="${{ env.ASSET_NAME }}") | .id') || true
+          echo "asset_id=${asset_id}" >> $GITHUB_OUTPUT
+
+      - name: Compare ETag & handle update
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -n "${{ steps.find_asset.outputs.asset_id }}" ]; then
+            remote_etag=$(curl -sI \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/octet-stream" \
+              https://api.github.com/repos/${{ github.repository }}/releases/assets/${{ steps.find_asset.outputs.asset_id }} \
+              | grep -i '^ETag:' | awk '{print $2}' | tr -d '\r')
+
+            if [ "$remote_etag" = "${{ steps.hash.outputs.etag }}" ]; then
+              echo "No change in registry.json; skipping upload."
+              exit 0
+            fi
+
+            # Delete old asset if it exists
+            gh api \
+              -X DELETE \
+              repos/${{ github.repository }}/releases/assets/${{ steps.find_asset.outputs.asset_id }}
+          fi
+
+          # Upload new asset
+          gh release upload ${{ env.RELEASE_TAG }} registry.json \
+            --clobber
