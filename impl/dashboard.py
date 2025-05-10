@@ -1352,4 +1352,4 @@ def datetime_to_ts(string) -> float:
 
 
 def timestamp_to_date(ts: float) -> str:
-    return datetime.utcfromtimestamp(ts).strftime("%b %d %Y")
+    return datetime.fromtimestamp(ts, timezone.utc).strftime("%b %d %Y")
