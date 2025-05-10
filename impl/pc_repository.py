@@ -11,7 +11,7 @@ import urllib.request
 from typing import Callable, TypedDict
 from typing_extensions import Required, TypeAlias
 
-from .config import PACKAGES_CACHE, REGISTRY_URL, ROOT_DIR
+from .config import REGISTRY_URL, ROOT_DIR
 from .utils import format_items
 
 
@@ -28,6 +28,7 @@ class GitInstallablePackage(TypedDict, total=False):
 LogWriter: TypeAlias = Callable[[str], None]
 PackageControlEntry: TypeAlias = "ProprietaryPackage | GitInstallablePackage"
 PackageDb: TypeAlias = "dict[str, PackageControlEntry]"
+timestamp: float = 0
 packages: PackageDb = {}
 CACHE_TIME = 600
 
@@ -35,16 +36,18 @@ CACHE_TIME = 600
 def fetch_packages(
     build: int, platform: str, log: LogWriter, force: bool = False
 ) -> PackageDb:
-    global packages
+    global packages, timestamp
 
-    # Try to load from cache first
-    if not force and (cached := load_cached_packages(PACKAGES_CACHE, log)):
-        packages, timestamp = cached
-        formatted_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
-        log(f"Using cached packages from {formatted_time}")
+    if (
+        not force
+        and packages
+        and time.time() - timestamp < CACHE_TIME
+    ):
+        # formatted_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
+        # log(f"Using cached packages from {formatted_time}")
         return packages
 
-    log("Fetching registered packages from packagecontrol.io")
+    log("Fetching registered packages...")
     now = time.monotonic()
 
     json_string = http_get_(REGISTRY_URL)
@@ -52,9 +55,11 @@ def fetch_packages(
     log(f"{len(packages_)} packages in total.")
 
     packages = prepare_packages_data(packages_, build, platform, log)
+    timestamp = time.time()
+
     elapsed = time.monotonic() - now
     log(f"Prepared packages in {elapsed:.2f} seconds.")
-    save_packages_cache(PACKAGES_CACHE, packages, log)
+
     return packages
 
 
@@ -154,39 +159,6 @@ def prepare_packages_data(
             msg = f"{format_items(proprietary)} are proprietary"
         log(msg)
     return rv  # type: ignore[return-value]
-
-
-def load_cached_packages(cache_file: str, log: LogWriter) -> tuple[PackageDb, float] | None:
-    cache_file_meta = f"{cache_file}.meta"
-    if not all(map(os.path.exists, (cache_file_meta, cache_file))):
-        return None
-    try:
-        with open(cache_file_meta, 'r', encoding='utf-8') as f:
-            timestamp = int(f.read())
-        if time.time() - timestamp > CACHE_TIME:  # 10 minutes
-            return None
-        with open(cache_file, 'r', encoding='utf-8') as f:
-            return json.load(f), timestamp
-    except Exception as e:
-        log(f"Failed to load cache: {e}")
-    return None
-
-
-def save_packages_cache(cache_file: str, packages_data: PackageDb, log: LogWriter) -> None:
-    cache_file_meta = f"{cache_file}.meta"
-    os.makedirs(os.path.dirname(cache_file), exist_ok=True)
-    try:
-        with open(cache_file_meta, 'w', encoding='utf-8') as f:
-            f.write(str(int(time.time())))
-
-        if os.path.exists(cache_file):
-            with open(cache_file, 'r', encoding='utf-8') as f:
-                if json.load(f) == packages_data:
-                    return
-        with open(cache_file, 'w', encoding='utf-8') as f:
-            json.dump(packages_data, f)
-    except Exception as e:
-        log(f"Failed to save cache: {e}")
 
 
 def supported_domain(url: str) -> bool:
