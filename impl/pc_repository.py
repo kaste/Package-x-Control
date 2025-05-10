@@ -137,18 +137,18 @@ def prepare_packages_data(
         name = p.get("name")
         website = p.get("details") or p.get("homepage") or ""
         if not name:
-            if name := extract_name_from_url(website):
-                p["name"] = name
-            else:
+            name = extract_name_from_url(website)
+            if not name:
                 log(f"skip {website or p}. can't extract a name from it.")
                 continue
+        info = {"name": name}
         if git_url := website_to_https_git(website):
-            p["git_url"] = git_url
-            p["refs"] = compute_refs_from_releases(p.get("releases", []), build, platform)
+            info["git_url"] = git_url
+            info["refs"] = compute_refs_from_releases(p.get("releases", []), build, platform)
         else:
             proprietary.append(name)
 
-        rv[name] = p
+        rv[name] = info
 
     if proprietary:
         if len(proprietary) == 1:
