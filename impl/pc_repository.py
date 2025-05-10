@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -10,7 +11,7 @@ import urllib.request
 from typing import Callable, TypedDict
 from typing_extensions import Required, TypeAlias
 
-from .config import PACKAGES_CACHE, REGISTRY_URL
+from .config import PACKAGES_CACHE, REGISTRY_URL, ROOT_DIR
 from .utils import format_items
 
 
@@ -58,8 +59,68 @@ def fetch_packages(
 
 
 def http_get_(location: str) -> str:
-    with urllib.request.urlopen(location) as response:
-        return response.read().decode('utf-8')
+    """
+    Fetch a resource from the given location with ETag and Last-Modified caching.
+
+    Args:
+        location: URL to fetch
+
+    Returns:
+        The content of the resource as a string
+    """
+    # Generate filename based on hash of the location
+    location_hash = hashlib.md5(location.encode()).hexdigest()
+    cache_path = os.path.join(ROOT_DIR, location_hash)
+    meta_path = cache_path + ".meta"
+
+    headers = {'User-Agent': 'Mozilla/5.0'}
+
+    # Check if we have a cached version with metadata
+    if os.path.exists(cache_path) and os.path.exists(meta_path):
+        with open(meta_path, 'r') as f:
+            metadata = json.load(f)
+
+        if metadata["location"] == location:
+            if etag := metadata.get('etag'):
+                headers['If-None-Match'] = etag
+            if last_modified := metadata.get('last_modified'):
+                headers['If-Modified-Since'] = last_modified
+
+    req = urllib.request.Request(location, headers=headers)
+    try:
+        with urllib.request.urlopen(req) as response:
+            new_metadata = {}
+            if 'ETag' in response.headers:
+                new_metadata['etag'] = response.headers['ETag']
+            if 'Last-Modified' in response.headers:
+                new_metadata['last_modified'] = response.headers['Last-Modified']
+
+            if new_metadata:
+                new_metadata.update({
+                    'location': location,
+                    'timestamp': time.time()
+                })
+                with open(meta_path, 'w') as f:
+                    json.dump(new_metadata, f)
+
+            content = response.read().decode('utf-8')
+            with open(cache_path, 'w') as f:
+                f.write(content)
+
+            return content
+
+    except urllib.error.HTTPError as e:
+        if e.code == 304:  # Not Modified
+            with open(cache_path, 'r') as f:
+                return f.read()
+        raise
+
+    except urllib.error.URLError:
+        # If there was any error but we have a cached version, return that
+        if os.path.exists(cache_path):
+            with open(cache_path, 'r') as f:
+                return f.read()
+        raise
 
 
 def prepare_packages_data(
