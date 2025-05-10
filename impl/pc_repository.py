@@ -164,7 +164,7 @@ def prepare_packages_data(
 def supported_domain(url: str) -> bool:
     return any(
         domain in url
-        for domain in ["github.com", "gitlab.com", "bitbucket.org"]
+        for domain in ["github.com", "gitlab.com", "bitbucket.org", "codeberg.org"]
     )
 
 

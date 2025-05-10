@@ -588,7 +588,10 @@ class pxc_toggle_disable_package(sublime_plugin.TextCommand):
             worker.add_task("package_control_fx", fx_, False, to_disable)
 
 
-HUBS = ["https://github.com/", "https://gitlab.com/", "https://bitbucket.org/"]
+HUBS = [
+    "https://github.com/", "https://gitlab.com/",
+    "https://bitbucket.org/", "https://codeberg.org/"
+]
 
 
 def parse_url_from_user_input(clip_content: str) -> str:
