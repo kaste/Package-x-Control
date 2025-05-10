@@ -10,7 +10,6 @@ permissions:
 
 env:
   RELEASE_TAG: registry-latest
-  ASSET_NAME: registry.json
 
 jobs:
   build-and-publish:
@@ -24,58 +23,66 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Generate registry.json
-        run: python scripts/generate_registry.py
-
-      - name: Compute local MD5 "ETag"
-        id: hash
+      - name: Generate new registry.json
+        id: generate
         run: |
-          hash=$(md5sum registry.json | cut -d ' ' -f1)
-          echo "etag=\"${hash}\"" >> $GITHUB_OUTPUT
-
-      - name: Create or update release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Create or update release
-          gh release view ${{ env.RELEASE_TAG }} || \
-          gh release create ${{ env.RELEASE_TAG }} \
-            --title "Registry Latest" \
-            --notes "Latest registry.json" \
-            --latest
-
-      - name: Check for existing asset
-        id: find_asset
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          asset_id=$(gh api \
-            repos/${{ github.repository }}/releases/tags/${{ env.RELEASE_TAG }} \
-            --jq '.assets[] | select(.name=="${{ env.ASSET_NAME }}") | .id') || true
-          echo "asset_id=${asset_id}" >> $GITHUB_OUTPUT
-
-      - name: Compare ETag & handle update
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [ -n "${{ steps.find_asset.outputs.asset_id }}" ]; then
-            remote_etag=$(curl -sI \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/octet-stream" \
-              https://api.github.com/repos/${{ github.repository }}/releases/assets/${{ steps.find_asset.outputs.asset_id }} \
-              | grep -i '^ETag:' | awk '{print $2}' | tr -d '\r')
-
-            if [ "$remote_etag" = "${{ steps.hash.outputs.etag }}" ]; then
-              echo "No change in registry.json; skipping upload."
-              exit 0
-            fi
-
-            # Delete old asset if it exists
-            gh api \
-              -X DELETE \
-              repos/${{ github.repository }}/releases/assets/${{ steps.find_asset.outputs.asset_id }}
+          python scripts/generate_registry.py
+          # Verify the file was created
+          if [ ! -f "registry.json" ]; then
+            echo "Error: registry.json was not generated"
+            exit 1
           fi
 
-          # Upload new asset
+          # Calculate hash of new file
+          NEW_HASH=$(sha256sum registry.json | cut -d ' ' -f 1)
+          echo "new_hash=$NEW_HASH" >> $GITHUB_OUTPUT
+          echo "New registry.json hash: $NEW_HASH"
+
+      - name: Try to download existing registry.json
+        id: download
+        continue-on-error: true
+        run: |
+          curl -s -L -o existing-registry.json https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/registry.json || echo "First run or download failed"
+          if [ -f "existing-registry.json" ]; then
+            EXISTING_HASH=$(sha256sum existing-registry.json | cut -d ' ' -f 1)
+            echo "existing_hash=$EXISTING_HASH" >> $GITHUB_OUTPUT
+            echo "Existing registry.json hash: $EXISTING_HASH"
+          else
+            echo "No existing registry.json found or download failed"
+            echo "existing_hash=none" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Determine if update is needed
+        id: check
+        run: |
+          # If first run or hashes differ, update is needed
+          if [ "${{ steps.download.outputs.existing_hash }}" != "${{ steps.generate.outputs.new_hash }}" ]; then
+            echo "update_needed=true" >> $GITHUB_OUTPUT
+            echo "Update needed: Content has changed or first run"
+          else
+            echo "update_needed=false" >> $GITHUB_OUTPUT
+            echo "No update needed: Content is unchanged"
+          fi
+
+      - name: Update release and upload asset if needed
+        if: steps.check.outputs.update_needed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Create or update the release
+          gh release view ${{ env.RELEASE_TAG }} || \
+          gh release create ${{ env.RELEASE_TAG }} \
+            --title "Registry" \
+            --notes "Latest registry.json" \
+
+          echo "Uploading registry.json file..."
           gh release upload ${{ env.RELEASE_TAG }} registry.json \
             --clobber
+
+      - name: Output result
+        run: |
+          if [ "${{ steps.check.outputs.update_needed }}" = "true" ]; then
+            echo "✅ Registry updated with new content"
+          else
+            echo "ℹ️ No changes detected in registry.json, skipped update"
+          fi
