@@ -73,8 +73,9 @@ def set_state(partial_state: State):
     run_on_update(state)
 
 
-def register(fn: UpdateCallback) -> None:
+def register(fn: UpdateCallback) -> UpdateCallback:
     registered_callbacks.add(fn)
+    return fn
 
 
 def run_on_update(state: State) -> None:

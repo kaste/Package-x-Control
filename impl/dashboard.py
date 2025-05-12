@@ -93,13 +93,11 @@ RESERVED_PACKAGES = {
 }
 
 
+@app_state.register
 def render_visible_dashboards(state: State):
     for view in visible_views():
         if view_is_our_dashboard(view):
             render(view, state)
-
-
-app_state.register(render_visible_dashboards)
 
 
 def visible_views(window: sublime.Window = None) -> Iterator[sublime.View]:
