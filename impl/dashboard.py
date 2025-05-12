@@ -91,7 +91,6 @@ RESERVED_PACKAGES = {
     'Binary', 'Default', 'Text', 'User', 'Package Control',
     'Package x Control',
 }
-dashboard_views: set[sublime.View] = set()
 
 
 def render_visible_dashboards(state: State):
@@ -146,7 +145,6 @@ def find_or_create_dashboard(window) -> sublime.View:
         # "gutter": False,
         # "rulers": [],
     })
-    dashboard_views.add(view)
     return view
 
 
@@ -169,12 +167,7 @@ class pxc_listener(sublime_plugin.EventListener):
     def on_activated(self, view):
         # Refresh only if it's our dashboard and maybe needs updating
         if view_is_our_dashboard(view):
-            # Ensure `dashboard_views` is kept up-to-date, e.g. after reloads.
-            dashboard_views.add(view)
             app_state.refresh()
-
-    def on_pre_close(self, view):
-        dashboard_views.discard(view)
 
     def on_text_command(self, view, command_name, args):
         if command_name == "toggle_comment" and view_is_our_dashboard(view):
