@@ -1064,10 +1064,11 @@ def refresh() -> None:
     """Fetches the latest state (if necessary) and renders the view."""
     global state
     fast_state(state, set_state)
+    pm = PackageManager()
     worker.add_task("fetch_packages", fetch_registered_packages, state, set_state)
     worker.add_task("refresh_disabled_packages", refresh_disabled_packages, state, set_state)
-    worker.add_task("refresh_our_packages", refresh_our_packages, state, set_state)
-    worker.add_task("refresh_installed_packages", refresh_installed_packages, state, set_state)
+    worker.add_task("refresh_our_packages", refresh_our_packages, state, set_state, pm)
+    worker.add_task("refresh_installed_packages", refresh_installed_packages, state, set_state, pm)
     worker.add_task("refresh_unmanaged_packages", refresh_unmanaged_packages, state, set_state)
 
 
@@ -1096,8 +1097,7 @@ def refresh_disabled_packages(state: State, set_state: StateSetter):
     set_state({"disabled_packages": disabled_packages})
 
 
-def refresh_our_packages(state: State, set_state: StateSetter):
-    pm = PackageManager()
+def refresh_our_packages(state: State, set_state: StateSetter, pm: PackageManager):
     config_data = get_configuration()
     entries = process_config(config_data)
     _p = {
@@ -1294,8 +1294,7 @@ def git_version_to_description(
         )
 
 
-def refresh_installed_packages(state: State, set_state: StateSetter):
-    pm = PackageManager()
+def refresh_installed_packages(state: State, set_state: StateSetter, pm: PackageManager):
     s = sublime.load_settings(PACKAGE_CONTROL_PREFERENCES)
     info: PackageInfo
     packages = []
