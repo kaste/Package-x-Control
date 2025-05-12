@@ -3,7 +3,7 @@ from unittesting import DeferrableTestCase
 
 from .mockito import unstub
 from .parameterized import parameterized as p
-plugin = importlib.import_module('Package x Control.impl.pc_repository')
+plugin = importlib.import_module('Package x Control.impl.the_registry')
 
 
 class TestConfigManagement(DeferrableTestCase):

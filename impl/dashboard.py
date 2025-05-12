@@ -41,7 +41,7 @@ from .glue_code import (
     install_package, install_proprietary_package,
     remove_package_by_name, remove_proprietary_package_by_name
 )
-from .pc_repository import extract_name_from_url, fetch_packages, PackageDb, PackageControlEntry
+from .the_registry import extract_name_from_url, fetch_packages, PackageDb, PackageControlEntry
 from .runtime import cooperative, on_ui, AWAIT_UI, AWAIT_WORKER
 from .utils import (
     drop_falsy, format_items, human_date, remove_prefix, remove_suffix,
