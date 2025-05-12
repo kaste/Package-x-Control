@@ -70,10 +70,10 @@ def ensure_on_ui(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> None:
     if it_runs_on_ui():
         fn(*args, **kwargs)
     else:
-        run_on_ui(fn, *args, **kwargs)
+        enqueue_on_ui(fn, *args, **kwargs)
 
 
-def run_on_ui(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> None:
+def enqueue_on_ui(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> None:
     sublime.set_timeout(partial(fn, *args, **kwargs))
 
 

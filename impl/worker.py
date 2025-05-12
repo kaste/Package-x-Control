@@ -10,7 +10,7 @@ import traceback
 from typing import Callable, TypeVar, Generic, Optional, Any
 from typing_extensions import ParamSpec, TypeAlias
 
-from .runtime import assert_it_runs_on_ui, run_on_ui
+from .runtime import assert_it_runs_on_ui, enqueue_on_ui
 import sublime
 
 
@@ -64,7 +64,7 @@ def add_task(topic: str, fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) 
 
 def add(topic: str, fn: Callable[[], T]) -> Future[T]:
     task = TopicTask(topic, fn)
-    run_on_ui(_add, task)
+    enqueue_on_ui(_add, task)
     return task.future
 
 
@@ -155,10 +155,10 @@ class Worker(threading.Thread):
                     print("Exception in worker", task, e)
                     traceback.print_exc()
                     task.future.set_exception(e)
-                    run_on_ui(_cancel_topic, task.topic)
+                    enqueue_on_ui(_cancel_topic, task.topic)
                 finally:
-                    run_on_ui(_tick, self, task)
+                    enqueue_on_ui(_tick, self, task)
         except Empty:
             pass
         finally:
-            run_on_ui(_did_shutdown, self)
+            enqueue_on_ui(_did_shutdown, self)
