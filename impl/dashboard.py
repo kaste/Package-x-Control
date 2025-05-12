@@ -42,7 +42,7 @@ from .glue_code import (
     remove_package_by_name, remove_proprietary_package_by_name
 )
 from .pc_repository import extract_name_from_url, fetch_packages, PackageDb, PackageControlEntry
-from .runtime import it_runs_on_ui, on_ui, run_on_worker
+from .runtime import enqueue_on_worker, it_runs_on_ui, on_ui
 from .utils import (
     drop_falsy, format_items, future, human_date, remove_prefix, remove_suffix,
     rmfile, rmtree, show_actions_panel, show_input_panel
@@ -234,7 +234,7 @@ class pxc_install_package(sublime_plugin.TextCommand):
             try:
                 state["initial_fetch_of_package_control_io"].result(0.5)
             except TimeoutError:
-                run_on_worker(self.run, edit, name)
+                enqueue_on_worker(self.run, edit, name)
 
         else:
             with ActivityIndicator() as progress:

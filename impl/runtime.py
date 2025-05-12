@@ -43,10 +43,10 @@ def ensure_on_worker(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> N
     if it_runs_on_worker():
         fn(*args, **kwargs)
     else:
-        run_on_worker(fn, *args, **kwargs)
+        enqueue_on_worker(fn, *args, **kwargs)
 
 
-def run_on_worker(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> None:
+def enqueue_on_worker(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> None:
     sublime.set_timeout_async(partial(fn, *args, **kwargs))
 
 
