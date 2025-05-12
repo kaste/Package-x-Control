@@ -33,7 +33,7 @@ packages: PackageDb = {}
 CACHE_TIME = 600
 
 
-def fetch_packages(
+def fetch_registry(
     build: int, platform: str, log: LogWriter, force: bool = False
 ) -> PackageDb:
     global packages, timestamp

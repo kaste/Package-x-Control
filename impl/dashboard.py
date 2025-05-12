@@ -41,7 +41,7 @@ from .glue_code import (
     install_package, install_proprietary_package,
     remove_package_by_name, remove_proprietary_package_by_name
 )
-from .the_registry import extract_name_from_url, fetch_packages, PackageDb, PackageControlEntry
+from .the_registry import extract_name_from_url, fetch_registry, PackageDb, PackageControlEntry
 from .runtime import cooperative, on_ui, AWAIT_UI, AWAIT_WORKER
 from .utils import (
     drop_falsy, format_items, human_date, remove_prefix, remove_suffix,
@@ -1091,7 +1091,7 @@ def fetch_registered_packages(state: State, set_state: StateSetter):
         set_state({"status_messages": d})
 
     printer(f"[{datetime.now():%d.%m.%Y %H:%M}]")
-    packages = fetch_packages(BUILD, PLATFORM, printer)
+    packages = fetch_registry(BUILD, PLATFORM, printer)
     yield AWAIT_UI   # ensure ordered update: the data *before* the future
     set_state({"registered_packages": packages})
     if not state["initial_fetch_of_package_control_io"].done():

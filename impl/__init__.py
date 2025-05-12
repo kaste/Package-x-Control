@@ -16,7 +16,7 @@ from .config import (
     ROOT_DIR,
 )
 from .glue_code import check_all_managed_packages_for_updates
-from .the_registry import fetch_packages
+from .the_registry import fetch_registry
 from .repository import ensure_repository_registry
 from .runtime import determine_thread_names, run_on_executor
 from .dashboard import *
