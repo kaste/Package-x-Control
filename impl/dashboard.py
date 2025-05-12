@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from collections import deque
-from concurrent.futures import as_completed, Future, TimeoutError
-from datetime import datetime, timezone
+from concurrent.futures import TimeoutError
 from functools import partial
 from itertools import chain
 import os
@@ -12,10 +10,8 @@ import re
 from webbrowser import open as open_in_browser
 
 from typing import (
-    Callable, Iterable, Iterator, Literal, NamedTuple, TypedDict,
-    Optional, Sequence
+    Callable, Iterable, Iterator, Sequence
 )
-from typing_extensions import TypeAlias
 
 import sublime
 import sublime_plugin
@@ -24,30 +20,28 @@ from package_control.activity_indicator import ActivityIndicator
 from package_control.package_manager import PackageManager
 
 from .config import (
-    BUILD, BACKUP_DIR, INSTALLED_PACKAGES_PATH, PACKAGE_CONTROL_PREFERENCES,
-    PACKAGES_PATH, PLATFORM, ROOT_DIR, SUBLIME_PREFERENCES
+    BACKUP_DIR, INSTALLED_PACKAGES_PATH, PACKAGE_CONTROL_PREFERENCES,
+    PACKAGES_PATH,
 )
 from .config_management import (
     PackageConfiguration,
     extract_repo_name, get_configuration, process_config
 )
-from .git_package import (
-    GitCallable, UpdateInfo, Version,
-    check_for_updates, ensure_repository, describe_current_commit, get_commit_date,
-    repo_is_valid
-)
+from .git_package import GitCallable
 from .glue_code import (
     disable_packages_by_name, enable_packages_by_name,
     install_package, install_proprietary_package,
     remove_package_by_name, remove_proprietary_package_by_name
 )
-from .the_registry import extract_name_from_url, fetch_registry, PackageDb, PackageControlEntry
-from .runtime import cooperative, on_ui, AWAIT_UI, AWAIT_WORKER
+from .the_registry import extract_name_from_url, PackageControlEntry
+from .runtime import cooperative, AWAIT_UI, AWAIT_WORKER
 from .utils import (
-    drop_falsy, format_items, human_date, remove_prefix, remove_suffix,
+    drop_falsy, format_items, human_date, remove_suffix,
     rmfile, rmtree, show_actions_panel, show_input_panel
 )
 from . import worker
+from . import app_state
+from .app_state import PackageInfo, State
 
 
 __all__ = (
@@ -63,29 +57,6 @@ __all__ = (
     "pxc_next_package",
     "pxc_previous_package",
 )
-
-
-class VersionDescription(NamedTuple):
-    kind: str  # 'tag', 'branch', 'commit'
-    specifier: str
-    date: Optional[float] = None  # Date for this version/commit
-
-
-class PackageInfo(TypedDict, total=False):
-    name: str
-    version: VersionDescription | None  # Current version/commit
-    update_available: VersionDescription | None  # Info about available update
-    checked_out: bool  # If the package is a git checkout
-
-
-class State(TypedDict, total=False):
-    installed_packages: list[PackageInfo]
-    package_controlled_packages: list[PackageInfo]
-    unmanaged_packages: list[PackageInfo]
-    disabled_packages: list[str]  # List of package names that are disabled
-    status_messages: deque[str]  # For messages at the bottom
-    registered_packages: PackageDb
-    initial_fetch_of_package_control_io: Future
 
 
 # Configuration object for dashboard formatting
@@ -121,27 +92,15 @@ RESERVED_PACKAGES = {
     'Package x Control',
 }
 dashboard_views: set[sublime.View] = set()
-state: State = {
-    "installed_packages": [],
-    "package_controlled_packages": [],
-    "unmanaged_packages": [],
-    "disabled_packages": [],
-    "status_messages": deque([], 10),
-    "registered_packages": {},
-    "initial_fetch_of_package_control_io": Future()
-}
 
 
-@on_ui
-def set_state(partial_state: State):
-    state.update(partial_state)
-    render_visible_dashboards()
-
-
-def render_visible_dashboards():
+def render_visible_dashboards(state: State):
     for view in visible_views():
         if view_is_our_dashboard(view):
             render(view, state)
+
+
+app_state.register(render_visible_dashboards)
 
 
 def visible_views(window: sublime.Window = None) -> Iterator[sublime.View]:
@@ -164,7 +123,7 @@ class pxc_dashboard(sublime_plugin.WindowCommand):
         window = self.window
         view = find_or_create_dashboard(window)
         window.focus_view(view)
-        refresh()
+        app_state.refresh()
 
 
 def find_or_create_dashboard(window) -> sublime.View:
@@ -212,7 +171,7 @@ class pxc_listener(sublime_plugin.EventListener):
         if view_is_our_dashboard(view):
             # Ensure `dashboard_views` is kept up-to-date, e.g. after reloads.
             dashboard_views.add(view)
-            refresh()
+            app_state.refresh()
 
     def on_pre_close(self, view):
         dashboard_views.discard(view)
@@ -230,10 +189,10 @@ class pxc_install_package(sublime_plugin.TextCommand):
         window = view.window()
         assert window
 
-        if not state["initial_fetch_of_package_control_io"].done():
+        if not app_state.state["initial_fetch_of_package_control_io"].done():
             yield AWAIT_WORKER
             try:
-                state["initial_fetch_of_package_control_io"].result(0.5)
+                app_state.state["initial_fetch_of_package_control_io"].result(0.5)
             except TimeoutError:
                 with ActivityIndicator() as progress:
                     for msg, timeout in (
@@ -245,7 +204,7 @@ class pxc_install_package(sublime_plugin.TextCommand):
                     ):
                         progress.set_label(msg)
                         try:
-                            state["initial_fetch_of_package_control_io"].result(timeout)
+                            app_state.state["initial_fetch_of_package_control_io"].result(timeout)
                         except TimeoutError:
                             pass
                         else:
@@ -259,7 +218,7 @@ class pxc_install_package(sublime_plugin.TextCommand):
 
             yield AWAIT_UI
 
-        registered_packages = state["registered_packages"]
+        registered_packages = app_state.state["registered_packages"]
 
         if name is None:
             name = sublime.get_clipboard(size_limit=1024)
@@ -290,13 +249,13 @@ class pxc_install_package(sublime_plugin.TextCommand):
                 sublime.save_settings(PACKAGE_CONTROL_PREFERENCES)
 
         def ensure_package_is_enabled(name: str):
-            if name in state["disabled_packages"]:
+            if name in app_state.state["disabled_packages"]:
                 enable_packages_by_name([name])
 
         def log_fx_(name: str):
             message = f"Installed {name}."
-            state["status_messages"].append(message)
-            refresh()
+            app_state.state["status_messages"].append(message)
+            app_state.refresh()
 
         def lookup_by_encoded_name_in_url(name: str) -> PackageControlEntry | None:
             for p in registered_packages.values():
@@ -371,8 +330,8 @@ class pxc_update_package(sublime_plugin.TextCommand):
         def fx_(entry: PackageConfiguration):
             install_package(entry)
             message = f"Updated {entry['name']}."
-            state["status_messages"].append(message)
-            refresh()
+            app_state.state["status_messages"].append(message)
+            app_state.refresh()
 
         config_data = get_configuration()
         entries = process_config(config_data)
@@ -400,8 +359,8 @@ class pxc_update_package(sublime_plugin.TextCommand):
 class pxc_remove_package(sublime_plugin.TextCommand):
     def run(self, edit):
         view = self.view
-        installed_packages = state["installed_packages"]
-        package_controlled_packages = state["package_controlled_packages"]
+        installed_packages = app_state.state["installed_packages"]
+        package_controlled_packages = app_state.state["package_controlled_packages"]
 
         def find_by_name(name: str) -> tuple[str, PackageInfo] | None:
             for section, pkgs in [
@@ -416,14 +375,14 @@ class pxc_remove_package(sublime_plugin.TextCommand):
         def remove_package_fx_(name: str):
             remove_package_by_name(name)
             message = f"Removed {name}."
-            state["status_messages"].append(message)
-            refresh()
+            app_state.state["status_messages"].append(message)
+            app_state.refresh()
 
         def remove_proprietary_package_fx_(name: str):
             remove_proprietary_package_by_name(name)
             message = f"Removed {name}."
-            state["status_messages"].append(message)
-            refresh()
+            app_state.state["status_messages"].append(message)
+            app_state.refresh()
 
         for package in get_selected_packages(view):
             result = find_by_name(package)
@@ -448,8 +407,8 @@ class pxc_check_out_package(sublime_plugin.TextCommand):
         window = view.window()
         assert window
 
-        installed_packages = state["installed_packages"]
-        package_controlled_packages = state["package_controlled_packages"]
+        installed_packages = app_state.state["installed_packages"]
+        package_controlled_packages = app_state.state["package_controlled_packages"]
 
         def find_by_name(name: str) -> tuple[str, PackageInfo] | None:
             for section, pkgs in [
@@ -490,8 +449,8 @@ class pxc_check_out_package(sublime_plugin.TextCommand):
                     print("Failed to remove {package_file}.  Should work anyway.")
 
             message = f"Unpacked {name}."
-            state["status_messages"].append(message)
-            refresh()
+            app_state.state["status_messages"].append(message)
+            app_state.refresh()
 
         config_data = get_configuration()
         entries = process_config(config_data)
@@ -522,7 +481,7 @@ class pxc_check_out_package(sublime_plugin.TextCommand):
                     view.show_popup(f"Huh?  {package} not found in the PxC-settings")
                     continue
             elif section == "controlled_by_pc":
-                registered_packages = state["registered_packages"]
+                registered_packages = app_state.state["registered_packages"]
                 package_control_entry = registered_packages.get(package)
                 if not package_control_entry:
                     view.show_popup(f"fatal: {package} not found in the package registry.")
@@ -570,7 +529,7 @@ class pxc_toggle_disable_package(sublime_plugin.TextCommand):
             if package in RESERVED_PACKAGES:
                 view.show_popup("Can't toggle built-ins.")
                 continue
-            if package in state["disabled_packages"]:
+            if package in app_state.state["disabled_packages"]:
                 to_enable.append(package)
             else:
                 to_disable.append(package)
@@ -580,8 +539,8 @@ class pxc_toggle_disable_package(sublime_plugin.TextCommand):
             fn(package_names)
             En = "En" if enable else "Dis"
             message = f"{En}abled {format_items(package_names)}."
-            state["status_messages"].append(message)
-            refresh()
+            app_state.state["status_messages"].append(message)
+            app_state.refresh()
 
         if to_enable:
             worker.add_task("package_control_fx", fx_, True, to_enable)
@@ -633,14 +592,14 @@ def parse_refs_from_user_input(clip_content: str) -> str:
 
 
 def grab_package_info_by_name(name: str) -> PackageInfo | None:
-    for p in state["installed_packages"]:
+    for p in app_state.state["installed_packages"]:
         if p["name"] == name:
             return p
     return None
 
 
 def is_managed_by_us(name: str) -> bool:
-    for p in state["installed_packages"]:
+    for p in app_state.state["installed_packages"]:
         if p["name"] == name:
             return True
     return False
@@ -651,7 +610,7 @@ class pxc_open_packagecontrol_io(sublime_plugin.TextCommand):
         view = self.view
         not_registered_packages = []
         for package in get_selected_packages(view):
-            if state["registered_packages"].get(package):
+            if app_state.state["registered_packages"].get(package):
                 quoted_name = urllib.parse.quote(package)
                 url = f"https://packagecontrol.io/packages/{quoted_name}"
                 open_in_browser(url)
@@ -1062,303 +1021,3 @@ def calculate_terse_section_widths(
     # name_width = max(*name_lengths, config.TERSE_SECTION_MIN_NAME_WIDTH)
     version_width = max(calculate_version_width(packages), config.TERSE_SECTION_MIN_VERSION_WIDTH)
     return name_width, version_width
-
-
-# --- State Refresher
-
-
-def refresh() -> None:
-    """Fetches the latest state (if necessary) and renders the view."""
-    global state
-    fast_state(state, set_state)
-    pm = PackageManager()
-    worker.add_task("fetch_packages", fetch_registered_packages, state, set_state)
-    worker.add_task("refresh_disabled_packages", refresh_disabled_packages, state, set_state)
-    worker.add_task("refresh_our_packages", refresh_our_packages, state, set_state, pm)
-    worker.add_task("refresh_installed_packages", refresh_installed_packages, state, set_state, pm)
-    worker.add_task("refresh_unmanaged_packages", refresh_unmanaged_packages, state, set_state)
-
-
-StateSetter: TypeAlias = Callable[[State], None]
-
-
-@cooperative
-def fetch_registered_packages(state: State, set_state: StateSetter):
-    @on_ui
-    def printer(message: str):
-        d = state["status_messages"]
-        d.append(message)
-        set_state({"status_messages": d})
-
-    printer(f"[{datetime.now():%d.%m.%Y %H:%M}]")
-    packages = fetch_registry(BUILD, PLATFORM, printer)
-    yield AWAIT_UI   # ensure ordered update: the data *before* the future
-    set_state({"registered_packages": packages})
-    if not state["initial_fetch_of_package_control_io"].done():
-        state["initial_fetch_of_package_control_io"].set_result(None)
-
-
-def refresh_disabled_packages(state: State, set_state: StateSetter):
-    s = sublime.load_settings(SUBLIME_PREFERENCES)
-    disabled_packages = s.get("ignored_packages") or []
-    set_state({"disabled_packages": disabled_packages})
-
-
-def refresh_our_packages(state: State, set_state: StateSetter, pm: PackageManager):
-    config_data = get_configuration()
-    entries = process_config(config_data)
-    _p = {
-        p["name"]: p
-        for p in state.get("installed_packages", [])
-    }
-    managed_packages = [entry["name"] for entry in entries]
-    packages = [
-        _p.get(package_name) or default_entry(package_name)
-        for package_name in managed_packages
-    ]
-
-    def fetch_package_info(entry: PackageConfiguration) -> PackageInfo:
-        package_name = entry["name"]
-        metadata = pm.get_metadata(package_name)
-        if not metadata:
-            if (
-                os.path.exists(os.path.join(PACKAGES_PATH, package_name, ".git"))
-                and not os.path.exists(os.path.join(
-                    PACKAGES_PATH, package_name, "package-metadata.json")
-                )
-            ):
-                return {
-                    "name": package_name,
-                    "checked_out": True
-                }
-            else:
-                return {
-                    "name": package_name,
-                    "checked_out": False,
-                    **installable_version_from_git_repo(entry)
-                }
-
-        return {
-            "name": package_name,
-            "checked_out": False,
-            **current_version_of_git_repo(os.path.join(ROOT_DIR, package_name)),
-            **new_version_from_git_repo(entry)
-        }
-
-    for f in as_completed([
-        worker.add_task(entry["name"], fetch_package_info, entry)
-        for entry in entries
-    ]):
-        info = f.result()
-        package_name = info["name"]
-        for i, p in enumerate(packages):
-            if p["name"] == package_name:
-                packages[i] = info
-                break
-        set_state({"installed_packages": packages})
-
-
-def fast_state(state: State, set_state: StateSetter):
-    config_data = get_configuration()
-    entries = process_config(config_data)
-    _p = {
-        p["name"]: p
-        for p in state.get("installed_packages", [])
-    }
-    managed_packages = [entry["name"] for entry in entries]
-    installed_packages = [
-        _p.get(package_name) or default_entry(package_name)
-        for package_name in managed_packages
-    ]
-
-    s = sublime.load_settings(SUBLIME_PREFERENCES)
-    disabled_packages = s.get("ignored_packages") or []
-
-    _p = {
-        p["name"]: p
-        for p in state.get("package_controlled_packages", [])
-    }
-    s = sublime.load_settings(PACKAGE_CONTROL_PREFERENCES)
-    package_controlled_packages = [
-        _p.get(package_name) or default_entry(package_name)
-        for package_name in s.get("installed_packages")
-    ]
-
-    _p = {
-        p["name"]: p
-        for p in state.get("unmanaged_packages", [])
-    }
-    unmanaged_packages = [
-        _p.get(package_name) or default_entry(package_name)
-        for package_name in get_unmanaged_package_names()
-    ]
-    set_state({
-        "disabled_packages": disabled_packages,
-        "installed_packages": installed_packages,
-        "package_controlled_packages": package_controlled_packages,
-        "unmanaged_packages": unmanaged_packages,
-    })
-
-
-def default_entry(package_name: str) -> PackageInfo:
-    return {"name": package_name, "checked_out": False}
-
-
-def get_unmanaged_package_names() -> list[str]:
-    s = sublime.load_settings(PACKAGE_CONTROL_PREFERENCES)
-    installed_packages = s.get("installed_packages")
-    return sorted((
-        name
-        for name in os.listdir(PACKAGES_PATH)
-        if name != "."
-        if name != ".."
-        if name.lower() != "user"
-        if name not in installed_packages
-        if (fpath := os.path.join(PACKAGES_PATH, name))
-        if os.path.isdir(fpath)
-        if not os.path.exists(os.path.join(fpath, ".hidden-sublime-package"))
-        if not os.path.exists(os.path.join(fpath, ".package-metadata.json"))
-    ), key=lambda s: s.lower())
-
-
-def refresh_unmanaged_packages(state: State, set_state: StateSetter):
-    _p = {
-        p["name"]: p
-        for p in state.get("unmanaged_packages", [])
-    }
-    unmanaged_packages = get_unmanaged_package_names()
-    packages = [
-        _p.get(package_name) or default_entry(package_name)
-        for package_name in unmanaged_packages
-    ]
-    set_state({"unmanaged_packages": packages})
-
-    def fetch_package_info(package_name: str) -> PackageInfo:
-        return {
-            "name": package_name,
-            # That's a lie, these are all checked out, but we
-            # don't want to show that explicitly in the UI.
-            "checked_out": False,
-            **current_version_of_git_repo(os.path.join(PACKAGES_PATH, package_name))
-        }
-
-    for f in as_completed([
-        worker.add_task(package_name, fetch_package_info, package_name)
-        for package_name in unmanaged_packages
-    ]):
-        info = f.result()
-        package_name = info["name"]
-        for i, p in enumerate(packages):
-            if p["name"] == package_name:
-                packages[i] = info
-                break
-        set_state({"unmanaged_packages": packages})
-
-
-def current_version_of_git_repo(repo_path: str) -> dict:
-    git = GitCallable(repo_path)
-    if not os.path.exists(git.git_dir) or not repo_is_valid(git):
-        return {}
-    version = describe_current_commit(git)
-    return {"version": git_version_to_description(version, git)}
-
-
-def new_version_from_git_repo(entry: PackageConfiguration) -> dict:
-    return next_version_from_git_repo(entry, lambda i: i["status"] == "needs-update")
-
-
-def installable_version_from_git_repo(entry: PackageConfiguration) -> dict:
-    return next_version_from_git_repo(entry, lambda i: i["status"] != "no-suitable-version-found")
-
-
-def next_version_from_git_repo(
-    entry: PackageConfiguration, predicate: Callable[[UpdateInfo], bool]
-) -> dict:
-    git = ensure_repository(entry, ROOT_DIR, GitCallable)
-    info = check_for_updates(entry["refs"], BUILD, git)
-    if predicate(info):
-        return {"update_available": git_version_to_description(info["version"], git)}
-    else:
-        return {}
-
-
-def git_version_to_description(
-    version: Version | None, git: GitCallable
-) -> VersionDescription | None:
-    if version is None:
-        return None
-    if version.refname and version.refname.startswith("refs/tags/"):
-        return VersionDescription(
-            "tag",
-            remove_prefix(version.refname, "refs/tags/").lstrip("v"),
-            get_commit_date(version.sha, git)
-        )
-    else:
-        return VersionDescription(
-            "commit",
-            version.sha[:8],
-            get_commit_date(version.sha, git)
-        )
-
-
-def refresh_installed_packages(state: State, set_state: StateSetter, pm: PackageManager):
-    s = sublime.load_settings(PACKAGE_CONTROL_PREFERENCES)
-    info: PackageInfo
-    packages = []
-    for package_name in s.get("installed_packages"):
-        metadata = pm.get_metadata(package_name)
-        if (
-            not metadata
-            or (
-                os.path.exists(os.path.join(PACKAGES_PATH, package_name, ".git"))
-                and not os.path.exists(os.path.join(
-                    PACKAGES_PATH, package_name, "package-metadata.json")
-                )
-            )
-        ):
-            info = {
-                "name": package_name,
-                "checked_out": True
-            }
-            packages.append(info)
-            continue
-        version = metadata.get("version")
-        calendar_version = is_calendar_version(version) if version else False
-        release_time = metadata.get("release_time")
-        info = {
-            "name": package_name,
-            "version": VersionDescription(
-                "tag" if version and not calendar_version else "",
-                version if version and not calendar_version else "",
-                (
-                    datetime_to_ts(release_time)
-                    if release_time else
-                    calendar_version_to_timestamp(version)
-                    if calendar_version else
-                    None
-                )
-            ),
-            "checked_out": False
-        }
-        packages.append(info)
-
-    set_state({"package_controlled_packages": packages})
-
-
-def is_calendar_version(version_str: str) -> Literal[False] | float:
-    parts = version_str.split('.')
-    return len(parts) == 6 and all(part.isdigit() for part in parts)
-
-
-def calendar_version_to_timestamp(version_str: str) -> float:
-    dt = datetime.strptime(version_str, "%Y.%m.%d.%H.%M.%S").replace(tzinfo=timezone.utc)
-    return dt.timestamp()
-
-
-def datetime_to_ts(string) -> float:
-    dt = datetime.strptime(string, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-    return dt.timestamp()
-
-
-def timestamp_to_date(ts: float) -> str:
-    return datetime.fromtimestamp(ts, timezone.utc).strftime("%b %d %Y")
