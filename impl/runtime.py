@@ -2,7 +2,7 @@ from __future__ import annotations
 from concurrent.futures import Future, ThreadPoolExecutor, wait
 from functools import partial, wraps
 import threading
-from typing import Callable, Collection, Iterable, TypeVar
+from typing import Callable, Collection, TypeVar
 from typing_extensions import ParamSpec, TypeAlias
 
 import sublime
