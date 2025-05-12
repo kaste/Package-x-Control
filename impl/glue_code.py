@@ -50,21 +50,19 @@ def check_all_managed_packages_for_updates() -> None:
 
 
 def _for_all_managed_packages(fn: Callable[[PackageConfiguration], PackageInfo]):
-    with ActivityIndicator():
-        config_data = get_configuration()
-        packages = gather([
-            worker.add_task(entry["name"], fn, entry)
-            for entry in process_config(config_data)
-        ])
-        installed_packages = [
-            create_package_entry(package_info)
-            for package_info in packages
-            if package_info["version"]
-        ]
-        recreate_repository(installed_packages, PACKAGES_REPOSITORY)
-        names = [p["name"] for p in installed_packages]
-        overwrite_package_control_data(names)
-
+    config_data = get_configuration()
+    packages = gather([
+        worker.add_task(entry["name"], fn, entry)
+        for entry in process_config(config_data)
+    ])
+    installed_packages = [
+        create_package_entry(package_info)
+        for package_info in packages
+        if package_info["version"]
+    ]
+    recreate_repository(installed_packages, PACKAGES_REPOSITORY)
+    names = [p["name"] for p in installed_packages]
+    overwrite_package_control_data(names)
     # fire-and-forget
     worker.add_task("cleanup_orphaned_packages", cleanup_orphaned_packages, names)
 
