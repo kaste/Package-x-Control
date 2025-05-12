@@ -811,7 +811,14 @@ def render_wide_section(
         format_package_wide(pkg, name_width, version_width, state, config)
         for pkg in packages
     ]
-    return f"=== {title}\n\n" + "\n\n".join(formatted_packages)
+    return (
+        f"=== {title}\n\n"
+        + "\n".join(
+            # emphasize packages that have updates (i.e. they're multi-line)
+            # by surrounding blank lines
+            (f"\n{p}\n" if "\n" in p else p) for p in formatted_packages
+        ).replace("\n\n\n", "\n\n")   #
+    )
 
 
 def format_package_wide(
