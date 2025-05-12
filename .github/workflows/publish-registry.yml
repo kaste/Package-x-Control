@@ -73,7 +73,7 @@ jobs:
           gh release view ${{ env.RELEASE_TAG }} || \
           gh release create ${{ env.RELEASE_TAG }} \
             --title "Registry" \
-            --notes "Latest registry.json" \
+            --notes "Latest registry.json"
 
           echo "Uploading registry.json file..."
           gh release upload ${{ env.RELEASE_TAG }} registry.json \
