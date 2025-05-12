@@ -42,9 +42,9 @@ from .glue_code import (
     remove_package_by_name, remove_proprietary_package_by_name
 )
 from .pc_repository import extract_name_from_url, fetch_packages, PackageDb, PackageControlEntry
-from .runtime import enqueue_on_worker, it_runs_on_ui, on_ui
+from .runtime import cooperative, on_ui, AWAIT_UI, AWAIT_WORKER
 from .utils import (
-    drop_falsy, format_items, future, human_date, remove_prefix, remove_suffix,
+    drop_falsy, format_items, human_date, remove_prefix, remove_suffix,
     rmfile, rmtree, show_actions_panel, show_input_panel
 )
 from . import worker
@@ -120,7 +120,6 @@ RESERVED_PACKAGES = {
     'Binary', 'Default', 'Text', 'User', 'Package Control',
     'Package x Control',
 }
-NullFuture = future(None)
 dashboard_views: set[sublime.View] = set()
 state: State = {
     "installed_packages": [],
@@ -129,7 +128,7 @@ state: State = {
     "disabled_packages": [],
     "status_messages": deque([], 10),
     "registered_packages": {},
-    "initial_fetch_of_package_control_io": NullFuture
+    "initial_fetch_of_package_control_io": Future()
 }
 
 
@@ -225,39 +224,41 @@ class pxc_listener(sublime_plugin.EventListener):
 
 
 class pxc_install_package(sublime_plugin.TextCommand):
+    @cooperative
     def run(self, edit, name: str = None):
         view = self.view
         window = view.window()
         assert window
 
-        if it_runs_on_ui():
+        if not state["initial_fetch_of_package_control_io"].done():
+            yield AWAIT_WORKER
             try:
                 state["initial_fetch_of_package_control_io"].result(0.5)
             except TimeoutError:
-                enqueue_on_worker(self.run, edit, name)
-
-        else:
-            with ActivityIndicator() as progress:
-                for msg, timeout in (
-                    ("Waiting for packagecontrol.io...", 10.0),
-                    ("🙄...", 4.0),
-                    ("😐...", 3.0),
-                    ("🤔...", 2.0),
-                    ("😒...", 10.0),
-                ):
-                    progress.set_label(msg)
-                    try:
-                        state["initial_fetch_of_package_control_io"].result(timeout)
-                    except TimeoutError:
-                        pass
+                with ActivityIndicator() as progress:
+                    for msg, timeout in (
+                        ("Waiting for packagecontrol.io...", 4.0),
+                        ("🙄...", 4.0),
+                        ("😐...", 3.0),
+                        ("🤔...", 2.0),
+                        ("😒...", 10.0),
+                    ):
+                        progress.set_label(msg)
+                        try:
+                            state["initial_fetch_of_package_control_io"].result(timeout)
+                        except TimeoutError:
+                            pass
+                        else:
+                            break
                     else:
-                        break
-                else:
-                    print(
-                        "Could not fetch packagecontrol repository.  This is technically "
-                        "not required but helps with configuring the right refs and custom "
-                        "package names.  Continue anyway."
-                    )
+                        print(
+                            "Could not fetch packagecontrol repository.  This is technically "
+                            "not required but helps with configuring the right refs and custom "
+                            "package names.  Continue anyway."
+                        )
+
+            yield AWAIT_UI
+
         registered_packages = state["registered_packages"]
 
         if name is None:
@@ -1063,9 +1064,7 @@ def refresh() -> None:
     """Fetches the latest state (if necessary) and renders the view."""
     global state
     fast_state(state, set_state)
-    f = worker.add_task("fetch_packages", fetch_registered_packages, state, set_state)
-    if state["initial_fetch_of_package_control_io"] is NullFuture:
-        set_state({"initial_fetch_of_package_control_io": f})
+    worker.add_task("fetch_packages", fetch_registered_packages, state, set_state)
     worker.add_task("refresh_disabled_packages", refresh_disabled_packages, state, set_state)
     worker.add_task("refresh_our_packages", refresh_our_packages, state, set_state)
     worker.add_task("refresh_installed_packages", refresh_installed_packages, state, set_state)
@@ -1075,6 +1074,7 @@ def refresh() -> None:
 StateSetter: TypeAlias = Callable[[State], None]
 
 
+@cooperative
 def fetch_registered_packages(state: State, set_state: StateSetter):
     @on_ui
     def printer(message: str):
@@ -1084,7 +1084,10 @@ def fetch_registered_packages(state: State, set_state: StateSetter):
 
     printer(f"[{datetime.now():%d.%m.%Y %H:%M}]")
     packages = fetch_packages(BUILD, PLATFORM, printer)
+    yield AWAIT_UI   # ensure ordered update: the data *before* the future
     set_state({"registered_packages": packages})
+    if not state["initial_fetch_of_package_control_io"].done():
+        state["initial_fetch_of_package_control_io"].set_result(None)
 
 
 def refresh_disabled_packages(state: State, set_state: StateSetter):
