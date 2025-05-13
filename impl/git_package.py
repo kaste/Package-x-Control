@@ -306,7 +306,7 @@ def parse_version(version: str) -> PEP440Version | tuple:
 
 def strip_possible_prefix(version: str) -> str:
     """Strip possible build prefixes from a tag."""
-    return re.sub(r'^(st\d+-|\d+-)', '', version)
+    return re.sub(r'^(st\d+-|\d+-|v)', '', version)
 
 
 def fetch_remote_refs(refs: str, git: GitCallable) -> dict[Ref, Sha]:
