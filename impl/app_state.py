@@ -95,10 +95,14 @@ def refresh() -> None:
     global state
     fast_state(state, set_state)
     pm = PackageManager()
-    worker.replace_or_add_task("fetch_packages:orchestrator", fetch_registered_packages, state, set_state)
-    worker.replace_or_add_task("refresh_our_packages:orchestrator", refresh_our_packages, state, set_state, pm)
-    worker.replace_or_add_task("refresh_installed_packages:orchestrator", refresh_installed_packages, state, set_state, pm)
-    worker.replace_or_add_task("refresh_unmanaged_packages:orchestrator", refresh_unmanaged_packages, state, set_state)
+    worker.replace_or_add_task(
+        "fetch_packages:orchestrator", fetch_registered_packages, state, set_state)
+    worker.replace_or_add_task(
+        "refresh_our_packages:orchestrator", refresh_our_packages, state, set_state, pm)
+    worker.replace_or_add_task(
+        "refresh_installed_packages:orchestrator", refresh_installed_packages, state, set_state, pm)
+    worker.replace_or_add_task(
+        "refresh_unmanaged_packages:orchestrator", refresh_unmanaged_packages, state, set_state)
 
 
 StateSetter: TypeAlias = Callable[[State], None]
