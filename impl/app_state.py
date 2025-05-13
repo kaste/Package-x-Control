@@ -161,7 +161,7 @@ def refresh_our_packages(state: State, set_state: StateSetter, pm: PackageManage
         return {
             "name": package_name,
             "checked_out": False,
-            **current_version_of_git_repo(os.path.join(ROOT_DIR, package_name)),
+            "version": version_from_metadata(metadata)
         }
 
     for f in as_completed([
@@ -362,22 +362,10 @@ def refresh_installed_packages(state: State, set_state: StateSetter, pm: Package
             }
             packages.append(info)
             continue
-        version = metadata.get("version")
-        calendar_version = is_calendar_version(version) if version else False
-        release_time = metadata.get("release_time")
+
         info = {
             "name": package_name,
-            "version": VersionDescription(
-                "tag" if version and not calendar_version else "",
-                version if version and not calendar_version else "",
-                (
-                    datetime_to_ts(release_time)
-                    if release_time else
-                    calendar_version_to_timestamp(version)
-                    if calendar_version else
-                    None
-                )
-            ),
+            "version": version_from_metadata(metadata),
             "checked_out": False
         }
         packages.append(info)
@@ -402,3 +390,20 @@ def datetime_to_ts(string) -> float:
 
 def timestamp_to_date(ts: float) -> str:
     return datetime.fromtimestamp(ts, timezone.utc).strftime("%b %d %Y")
+
+
+def version_from_metadata(metadata: dict) -> VersionDescription:
+    version = metadata.get("version")
+    calendar_version = is_calendar_version(version) if version else False
+    release_time = metadata.get("release_time")
+    return VersionDescription(
+        "tag" if version and not calendar_version else "",
+        version if version and not calendar_version else "",
+        (
+            datetime_to_ts(release_time)
+            if release_time else
+            calendar_version_to_timestamp(version)
+            if version and calendar_version else
+            None
+        )
+    )
