@@ -26,7 +26,7 @@ from .git_package import (
     check_for_updates, ensure_repository, describe_current_commit, get_commit_date,
     repo_is_valid
 )
-from .runtime import cooperative, on_ui, AWAIT_UI
+from .runtime import cooperative, gather, on_ui, AWAIT_UI
 from .the_registry import fetch_registry, PackageDb
 from .utils import remove_prefix
 from . import worker
@@ -165,7 +165,6 @@ def refresh_our_packages(state: State, set_state: StateSetter, pm: PackageManage
             "name": package_name,
             "checked_out": False,
             **current_version_of_git_repo(os.path.join(ROOT_DIR, package_name)),
-            **new_version_from_git_repo(entry)
         }
 
     for f in as_completed([
@@ -179,6 +178,27 @@ def refresh_our_packages(state: State, set_state: StateSetter, pm: PackageManage
                 packages[i] = info
                 break
         set_state({"installed_packages": packages})
+
+    def fetch_update_info(entry: PackageConfiguration) -> None:
+        package_name = entry["name"]
+        metadata = pm.get_metadata(package_name)
+        if not metadata:
+            return
+
+        for i, p in enumerate(packages):
+            if p["name"] == package_name:
+                if (
+                    not p["checked_out"]
+                    and (update_info := new_version_from_git_repo(entry))
+                ):
+                    p.update(update_info)  # type: ignore[typeddict-item]
+                    set_state({"installed_packages": packages})
+                return
+
+    gather([
+        worker.add_task(entry["name"], fetch_update_info, entry)
+        for entry in entries
+    ])
 
 
 def fast_state(state: State, set_state: StateSetter):
