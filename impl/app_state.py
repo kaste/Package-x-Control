@@ -4,6 +4,7 @@ from collections import deque
 from concurrent.futures import as_completed, Future
 from datetime import datetime, timezone
 import os
+import traceback
 
 from typing import (
     Callable, Literal, NamedTuple, TypedDict, Optional
@@ -83,7 +84,7 @@ def run_on_update(state: State) -> None:
         try:
             fn(state)
         except Exception:
-            pass
+            traceback.print_exc()
 
 
 # --- State Refresher
