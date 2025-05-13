@@ -96,7 +96,6 @@ def refresh() -> None:
     fast_state(state, set_state)
     pm = PackageManager()
     worker.replace_or_add_task("fetch_packages:orchestrator", fetch_registered_packages, state, set_state)
-    worker.replace_or_add_task("refresh_disabled_packages:orchestrator", refresh_disabled_packages, state, set_state)
     worker.replace_or_add_task("refresh_our_packages:orchestrator", refresh_our_packages, state, set_state, pm)
     worker.replace_or_add_task("refresh_installed_packages:orchestrator", refresh_installed_packages, state, set_state, pm)
     worker.replace_or_add_task("refresh_unmanaged_packages:orchestrator", refresh_unmanaged_packages, state, set_state)
@@ -119,12 +118,6 @@ def fetch_registered_packages(state: State, set_state: StateSetter):
     set_state({"registered_packages": packages})
     if not state["initial_fetch_of_package_control_io"].done():
         state["initial_fetch_of_package_control_io"].set_result(None)
-
-
-def refresh_disabled_packages(state: State, set_state: StateSetter):
-    s = sublime.load_settings(SUBLIME_PREFERENCES)
-    disabled_packages = s.get("ignored_packages") or []
-    set_state({"disabled_packages": disabled_packages})
 
 
 def refresh_our_packages(state: State, set_state: StateSetter, pm: PackageManager):
