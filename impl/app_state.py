@@ -137,65 +137,59 @@ def refresh_our_packages(state: State, set_state: StateSetter, pm: PackageManage
         for package_name in managed_packages
     ]
 
-    def fetch_package_info(entry: PackageConfiguration) -> PackageInfo:
+    def fetch_package_info(entry: PackageConfiguration, i: int):
         package_name = entry["name"]
         metadata = pm.get_metadata(package_name)
-        if not metadata:
-            if (
-                os.path.exists(os.path.join(PACKAGES_PATH, package_name, ".git"))
-                and not os.path.exists(os.path.join(
-                    PACKAGES_PATH, package_name, "package-metadata.json")
+        if metadata:
+            version = version_from_metadata(metadata)
+            update_available = packages[i].get("update_available")
+            packages[i] = {
+                "name": package_name,
+                "checked_out": False,
+                "version": version,
+                **(
+                    {"update_available": update_available}
+                    if update_available and update_available != version
+                    else {}
                 )
-            ):
-                return {
-                    "name": package_name,
-                    "checked_out": True
-                }
-            else:
-                return {
-                    "name": package_name,
-                    "checked_out": False,
-                    **installable_version_from_git_repo(entry)
-                }
+            }
+            worker.add_task(package_name, fetch_update_info, entry, i)
 
-        return {
-            "name": package_name,
-            "checked_out": False,
-            "version": version_from_metadata(metadata)
-        }
+        elif (
+            os.path.exists(os.path.join(PACKAGES_PATH, package_name, ".git"))
+            and not os.path.exists(os.path.join(
+                PACKAGES_PATH, package_name, "package-metadata.json")
+            )
+        ):
+            packages[i] = {
+                "name": package_name,
+                "checked_out": True
+            }
 
-    for f in as_completed([
-        worker.add_task(entry["name"], fetch_package_info, entry)
-        for entry in entries
-    ]):
-        info = f.result()
-        package_name = info["name"]
-        for i, p in enumerate(packages):
-            if p["name"] == package_name:
-                packages[i] = info
-                break
+        else:
+            packages[i] = {
+                "name": package_name,
+                "checked_out": False,
+                **next_version_from_git_repo(entry)
+            }
+
         set_state({"installed_packages": packages})
 
-    def fetch_update_info(entry: PackageConfiguration) -> None:
-        package_name = entry["name"]
-        metadata = pm.get_metadata(package_name)
-        if not metadata:
-            return
-
-        for i, p in enumerate(packages):
-            if p["name"] == package_name:
-                if (
-                    not p["checked_out"]
-                    and (update_info := new_version_from_git_repo(entry))
-                ):
-                    p.update(update_info)  # type: ignore[typeddict-item]
-                    set_state({"installed_packages": packages})
-                return
+    def fetch_update_info(entry: PackageConfiguration, i: int) -> None:
+        update_info = next_version_from_git_repo(entry)
+        update_available = update_info.get("update_available")
+        info = packages[i]
+        if not update_available:
+            info.pop("update_available", None)
+        elif update_available != info.get("version"):
+            info.update(update_info)  # type: ignore[typeddict-item]
+        set_state({"installed_packages": packages})
 
     gather([
-        worker.add_task(entry["name"], fetch_update_info, entry)
-        for entry in entries
+        worker.add_task(entry["name"], fetch_package_info, entry, i)
+        for i, entry in enumerate(entries)
     ])
+
 
 
 def fast_state(state: State, set_state: StateSetter):
@@ -303,23 +297,13 @@ def current_version_of_git_repo(repo_path: str) -> dict:
     return {"version": git_version_to_description(version, git)}
 
 
-def new_version_from_git_repo(entry: PackageConfiguration) -> dict:
-    return next_version_from_git_repo(entry, lambda i: i["status"] == "needs-update")
-
-
-def installable_version_from_git_repo(entry: PackageConfiguration) -> dict:
-    return next_version_from_git_repo(entry, lambda i: i["status"] != "no-suitable-version-found")
-
-
-def next_version_from_git_repo(
-    entry: PackageConfiguration, predicate: Callable[[UpdateInfo], bool]
-) -> dict:
+def next_version_from_git_repo(entry: PackageConfiguration) -> dict:
     git = ensure_repository(entry, ROOT_DIR, GitCallable)
     info = check_for_updates(entry["refs"], BUILD, git)
-    if predicate(info):
-        return {"update_available": git_version_to_description(info["version"], git)}
-    else:
+    if info["status"] == "no-suitable-version-found":
         return {}
+    else:
+        return {"update_available": git_version_to_description(info["version"], git)}
 
 
 def git_version_to_description(
