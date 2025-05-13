@@ -766,8 +766,15 @@ def render_wide_section(
         + "\n".join(
             # emphasize packages that have updates (i.e. they're multi-line)
             # by surrounding blank lines
-            (f"\n{p}\n" if "\n" in p else p) for p in formatted_packages
-        ).replace("\n\n\n", "\n\n")   #
+            (
+                f"{p}\n" if i == 0 else
+                f"\n{p}" if i == len(formatted_packages) - 1 else
+                f"\n{p}\n"
+            )
+            if "\n" in p
+            else p
+            for i, p in enumerate(formatted_packages)
+        ).replace("\n\n\n", "\n\n")
     )
 
 
