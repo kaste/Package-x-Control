@@ -81,6 +81,8 @@ def drain_queue(
         try:
             result = fetch_repo(location)
             urls_to_fetch.extend(result["includes"])
+            if result.get("schema_version", "1").startswith("1"):
+                result = {"packages": [], "includes": []}
         except Exception as e:
             result = {"packages": [], "includes": []}
             print(f"Error fetching {location}: {e}")
