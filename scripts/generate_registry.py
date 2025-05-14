@@ -1,18 +1,14 @@
 from __future__ import annotations
 
-from collections import deque
-from concurrent.futures import ThreadPoolExecutor, wait
+import asyncio
+import aiohttp
 import json
 import os
 import re
-import threading
 import time
+from collections import deque
 from urllib.parse import urljoin
-import urllib.request
-
-
 from typing import Generic, Iterable, List, TypeVar
-
 
 T = TypeVar("T")
 PackageDb = List[dict]
@@ -22,34 +18,36 @@ DEFAULT_CHANNEL = (
     "https://raw.githubusercontent.com/wbond/package_control_channel"
     "/refs/heads/master/channel.json"
 )
-MAX_WORKERS = 16
+MAX_CONCURRENCY = 32
+GLOBAL_TIMEOUT = 60  # seconds
 
 
-def main():
-    db = fetch_packages()
-    with open(OUTPUT_FILE, 'w') as f:
-        json.dump(db, f)
-    print(f"Saved registry as {OUTPUT_FILE}")
+async def main():
+    try:
+        async with asyncio.timeout(GLOBAL_TIMEOUT):
+            db = await fetch_packages()
+            with open(OUTPUT_FILE, 'w') as f:
+                json.dump(db, f)
+            print(f"Saved registry as {OUTPUT_FILE}")
+    except asyncio.TimeoutError:
+        print(f"Timeout: script took more than {GLOBAL_TIMEOUT} seconds")
 
 
-def fetch_packages() -> PackageDb:
+async def fetch_packages() -> PackageDb:
     print("Fetching registered packages from packagecontrol.io")
     now = time.monotonic()
-    repos: list[str] = get_repositories(DEFAULT_CHANNEL)
-    urls_to_fetch = DedupQueue(repos, thread_safe=True)
+
     results: dict[str, dict] = {}
 
-    num_threads = min(MAX_WORKERS, len(repos))
-    with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        futures = [
-            executor.submit(drain_queue, urls_to_fetch, results)
-            for _ in range(num_threads)
-        ]
-        wait(futures, timeout=60)
+    async with aiohttp.ClientSession() as session:
+        repos: list[str] = await get_repositories(DEFAULT_CHANNEL, session)
+        urls_to_fetch = DedupQueue(repos)
+        await asyncio.gather(*[
+            asyncio.create_task(drain_queue(urls_to_fetch, results, session))
+            for _ in range(MAX_CONCURRENCY)
+        ])
 
-    # Collect the results
-    # The main repo is the first one.  Run reversed so that others
-    # can't override it.
+    # Reassemble packages
     urls_ordered = DedupQueue(reversed(repos))
     packages = []
     while True:
@@ -57,7 +55,7 @@ def fetch_packages() -> PackageDb:
             url = urls_ordered.pop()
         except IndexError:
             break
-        result = results[url]
+        result = results.get(url, {"packages": [], "includes": []})
         packages.extend(result["packages"])
         for include in reversed(result["includes"]):
             urls_ordered.append(include)
@@ -68,9 +66,10 @@ def fetch_packages() -> PackageDb:
     return packages
 
 
-def drain_queue(
+async def drain_queue(
     urls_to_fetch: DedupQueue[str],
     results: dict[str, dict],
+    session: aiohttp.ClientSession
 ) -> None:
     while True:
         try:
@@ -78,64 +77,48 @@ def drain_queue(
         except IndexError:
             break
 
-        try:
-            result = fetch_repo(location)
-            urls_to_fetch.extend(result["includes"])
-            if result.get("schema_version", "1").startswith("1"):
-                result = {"packages": [], "includes": []}
-        except Exception as e:
-            result = {"packages": [], "includes": []}
-            print(f"Error fetching {location}: {e}")
-        finally:
-            results[location] = result
+        result = await fetch_repo(location, session)
+        urls_to_fetch.extend(result["includes"])
+        results[location] = result
 
 
-def fetch_repo(location: str) -> dict:
-    repo_info = http_get_json(location)
-    repo_info["includes"] = list(resolve_urls(
-        location, repo_info.get("includes", [])
-    ))
+async def fetch_repo(location: str, session: aiohttp.ClientSession) -> dict:
+    try:
+        repo_info = await http_get_json(location, session)
+    except Exception as e:
+        print(f"Error fetching {location}: {e}")
+        return {"packages": [], "includes": []}
+
+    if repo_info.get("schema_version", "1.2").startswith("1."):
+        return {"packages": [], "includes": []}
+
+    includes = list(resolve_urls(location, repo_info.get("includes", [])))
+    repo_info["includes"] = includes
     return repo_info
 
 
-def get_repositories(channel_url: str) -> list[str]:
-    channel_info = http_get_json(channel_url)
+async def get_repositories(channel_url: str, session: aiohttp.ClientSession) -> list[str]:
+    channel_info = await http_get_json(channel_url, session)
     return [
         update_url(url)
         for url in resolve_urls(channel_url, channel_info['repositories'])
     ]
 
 
-def http_get_json(location: str) -> dict:
-    json_string = http_get(location)
-    return json.loads(json_string)
+async def http_get_json(location: str, session: aiohttp.ClientSession) -> dict:
+    text = await http_get(location, session)
+    return json.loads(text)
 
 
-def http_get(location: str) -> str:
-    req = urllib.request.Request(
-        location,
-        headers={'User-Agent': 'Mozilla/5.0'}
-    )
-    with urllib.request.urlopen(req) as response:
-        return response.read().decode('utf-8')
+async def http_get(location: str, session: aiohttp.ClientSession) -> str:
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    async with session.get(location, headers=headers) as resp:
+        resp.raise_for_status()
+        return await resp.text()
 
 
 def resolve_urls(root_url, uris):
-    """
-    Convert a list of relative uri's to absolute urls/paths.
-
-    :param root_url:
-        The root url string
-
-    :param uris:
-        An iterable of relative uri's to resolve.
-
-    :returns:
-        A generator of resolved URLs
-    """
-
     scheme_match = re.match(r'^(file:/|https?:)//', root_url, re.I)
-
     for url in uris:
         if not url:
             continue
@@ -144,8 +127,7 @@ def resolve_urls(root_url, uris):
                 url = scheme_match.group(1) + url
             else:
                 url = 'https:' + url
-        elif url.startswith('/'):
-            # We don't allow absolute repositories
+        elif url.startswith('/') or url.startswith('file:'):
             continue
         elif url.startswith('./') or url.startswith('../'):
             url = urljoin(root_url, url)
@@ -153,23 +135,8 @@ def resolve_urls(root_url, uris):
 
 
 def update_url(url: str) -> str:
-    """
-    Takes an old, out-dated URL and updates it. Mostly used with GitHub URLs
-    since they tend to be constantly evolving their infrastructure.
-
-    :param url:
-        The URL to update
-
-    :param debug:
-        If debugging is enabled
-
-    :return:
-        The updated URL
-    """
-
     if not url:
         return url
-
     url = url.replace('://raw.github.com/', '://raw.githubusercontent.com/')
     url = url.replace('://nodeload.github.com/', '://codeload.github.com/')
     url = re.sub(
@@ -177,19 +144,15 @@ def update_url(url: str) -> str:
         '\\1zip\\2',
         url
     )
-
-    # Fix URLs from old versions of Package Control since we are going to
-    # remove all packages but Package Control from them to force upgrades
-    if (
-        url == 'https://sublime.wbond.net/repositories.json'
-        or url == 'https://sublime.wbond.net/channel.json'
-    ):
+    if url in {
+        'https://sublime.wbond.net/repositories.json',
+        'https://sublime.wbond.net/channel.json',
+    }:
         url = 'https://packagecontrol.io/channel_v3.json'
-
     return url
 
 
-class _DedupQueue(Generic[T]):
+class DedupQueue(Generic[T]):
     def __init__(self, items: Iterable[T] | None = None) -> None:
         self._queue: deque[T] = deque()
         self._seen: set[T] = set()
@@ -202,50 +165,15 @@ class _DedupQueue(Generic[T]):
             self._queue.append(item)
 
     def extend(self, items: Iterable[T]) -> None:
-        unseen = [item for item in items if item not in self._seen]
-        self._seen.update(unseen)
-        self._queue.extend(unseen)
+        for item in items:
+            self.append(item)
 
     def pop(self) -> T:
         return self._queue.pop()
 
     def popleft(self) -> T:
         return self._queue.popleft()
-
-
-class _DedupQueueL(_DedupQueue[T]):
-    def __init__(self, items: Iterable[T] | None = None) -> None:
-        self._lock = threading.Lock()
-        super().__init__(items)
-
-    def append(self, item: T) -> None:
-        with self._lock:
-            super().append(item)
-
-    def extend(self, items: Iterable[T]) -> None:
-        with self._lock:
-            super().extend(items)
-
-    def pop(self) -> T:
-        return self._queue.pop()
-
-    def popleft(self) -> T:
-        return self._queue.popleft()
-
-
-class DedupQueue(Generic[T]):
-    """A deduplicating queue, optionally thread safe."""
-    def __new__(self, items: Iterable[T] | None = None, thread_safe: bool = False):
-        return _DedupQueueL(items) if thread_safe else _DedupQueue(items)
-
-    def __init__(                                      # noqa: E704
-        self, items: Iterable[T] | None = None, thread_safe: bool = False
-    ): ...
-    def append(self, item: T) -> None: ...             # noqa: E704
-    def extend(self, items: Iterable[T]) -> None: ...  # noqa: E704
-    def pop(self) -> T: ...                            # type: ignore[empty-body]  # noqa: E704
-    def popleft(self) -> T: ...                        # type: ignore[empty-body]  # noqa: E704
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
