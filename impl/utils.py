@@ -248,3 +248,100 @@ def rmfile(target_file: str) -> bool:
     except OSError:
         pass
     return not os.path.exists(target_file)
+
+
+if os.name == "nt":
+    try:
+        isjunction = os.path.isjunction  # type: ignore[attr-defined]
+    except AttributeError:
+        import os
+        import ctypes
+        from ctypes import wintypes
+
+        # Constants
+        FILE_ATTRIBUTE_REPARSE_POINT = 0x0400
+        IO_REPARSE_TAG_MOUNT_POINT = 0xA0000003
+
+        # ctypes setup
+        GetFileAttributesW = ctypes.windll.kernel32.GetFileAttributesW
+        GetFileAttributesW.argtypes = [wintypes.LPCWSTR]
+        GetFileAttributesW.restype = wintypes.DWORD
+
+        CreateFileW = ctypes.windll.kernel32.CreateFileW
+        CreateFileW.argtypes = [
+            wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD,
+            wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD,
+            wintypes.HANDLE
+        ]
+        CreateFileW.restype = wintypes.HANDLE
+
+        DeviceIoControl = ctypes.windll.kernel32.DeviceIoControl
+        DeviceIoControl.argtypes = [
+            wintypes.HANDLE, wintypes.DWORD, wintypes.LPVOID, wintypes.DWORD,
+            wintypes.LPVOID, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD),
+            wintypes.LPVOID
+        ]
+        DeviceIoControl.restype = wintypes.BOOL
+
+        CloseHandle = ctypes.windll.kernel32.CloseHandle
+        CloseHandle.argtypes = [wintypes.HANDLE]
+        CloseHandle.restype = wintypes.BOOL
+
+        # IOCTL constants
+        FSCTL_GET_REPARSE_POINT = 0x000900A8
+        FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
+        FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
+        OPEN_EXISTING = 3
+        GENERIC_READ = 0x80000000
+        INVALID_HANDLE_VALUE = wintypes.HANDLE(-1).value
+
+        # REPARSE_DATA_BUFFER (simplified)
+        class REPARSE_DATA_BUFFER(ctypes.Structure):
+            _fields_ = [
+                ('ReparseTag', wintypes.DWORD),
+                ('ReparseDataLength', wintypes.USHORT),
+                ('Reserved', wintypes.USHORT),
+                ('Rest', ctypes.c_byte * 0x3FC)  # Max reparse buffer size
+            ]
+
+        def isjunction(path: str) -> bool:
+            if not os.path.exists(path):
+                return False
+
+            attrs = GetFileAttributesW(path)
+            if attrs == 0xFFFFFFFF or not (attrs & FILE_ATTRIBUTE_REPARSE_POINT):
+                return False
+
+            handle = CreateFileW(
+                path,
+                GENERIC_READ,
+                0,
+                None,
+                OPEN_EXISTING,
+                FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+                None
+            )
+
+            if handle == INVALID_HANDLE_VALUE:
+                return False
+
+            try:
+                buf = REPARSE_DATA_BUFFER()
+                bytes_returned = wintypes.DWORD()
+                res = DeviceIoControl(
+                    handle,
+                    FSCTL_GET_REPARSE_POINT,
+                    None, 0,
+                    ctypes.byref(buf), ctypes.sizeof(buf),
+                    ctypes.byref(bytes_returned),
+                    None
+                )
+                if not res:
+                    return False
+                return buf.ReparseTag == IO_REPARSE_TAG_MOUNT_POINT
+            finally:
+                CloseHandle(handle)
+
+else:
+    def isjunction(path: str) -> bool:
+        return False

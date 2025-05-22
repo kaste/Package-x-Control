@@ -28,7 +28,7 @@ from .git_package import (
 )
 from .runtime import cooperative, gather, on_ui, AWAIT_UI
 from .the_registry import fetch_registry, PackageDb
-from .utils import remove_prefix
+from .utils import isjunction, remove_prefix
 from . import worker
 
 
@@ -291,10 +291,14 @@ def refresh_unmanaged_packages(state: State, set_state: StateSetter):
 
 def current_version_of_git_repo(repo_path: str) -> dict:
     git = GitCallable(repo_path)
-    if not os.path.exists(git.git_dir) or not repo_is_valid(git):
-        return {}
-    version = describe_current_commit(git)
-    return {"version": git_version_to_description(version, git)}
+    if (
+        os.path.exists(git.git_dir)
+        or os.path.islink(repo_path)
+        or isjunction(repo_path)
+    ) and repo_is_valid(git):
+        version = describe_current_commit(git)
+        return {"version": git_version_to_description(version, git)}
+    return {}
 
 
 def next_version_from_git_repo(entry: PackageConfiguration) -> dict:
