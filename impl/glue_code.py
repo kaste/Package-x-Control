@@ -1,6 +1,7 @@
 from __future__ import annotations
 from contextlib import contextmanager
 from functools import partial
+import json
 import os
 import shutil
 import stat
@@ -193,7 +194,7 @@ def run_pc_install_task(packages: list[str], progress: ActivityIndicator, unatte
 def mutate_package_control_data():
     # PACKAGE_CONTROL_OVERRIDE runs besides the standard settings
     # machinery and must be read and updated manually.
-    with open(PACKAGE_CONTROL_OVERRIDE, "r", encoding="utf-8") as f:
+    with open(PACKAGE_CONTROL_OVERRIDE, 'r') as f:
         text = f.read()
     value = sublime.decode_value(text)
     installed_packages = value.get("installed_packages", [])
@@ -203,8 +204,8 @@ def mutate_package_control_data():
     if installed_packages == copy:
         return
 
-    with open(PACKAGE_CONTROL_OVERRIDE, 'w', encoding='utf-8') as f:
-        f.write(sublime_encode_value(value, update_text=text))
+    with open(PACKAGE_CONTROL_OVERRIDE, 'w') as f:
+        json.dump(value, f, indent=2)
 
 
 def overwrite_package_control_data(package_names: list[str]) -> None:
