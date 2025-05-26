@@ -1,5 +1,4 @@
 from __future__ import annotations
-from concurrent.futures import Future
 from contextlib import contextmanager
 from functools import partial
 import os
