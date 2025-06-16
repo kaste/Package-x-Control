@@ -5,7 +5,7 @@
    <key>name</key>
    <string>Symbol List</string>
    <key>scope</key>
-   <string>entity.name.package.pxc-dashboard,keyword.entity.name.section.pxc-dashboard</string>
+   <string>entity.name.package.pxc-dashboard,entity.name.package.disabled.pxc-dashboard,keyword.entity.name.section.pxc-dashboard</string>
    <key>settings</key>
    <dict>
       <key>showInSymbolList</key>
