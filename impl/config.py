@@ -5,7 +5,7 @@ import sublime
 INSTALLED_PACKAGES_PATH = sublime.installed_packages_path()
 PACKAGES_PATH = sublime.packages_path()
 CACHE_PATH = sublime.cache_path()
-BACKUP_DIR = os.path.join(os.path.dirname(INSTALLED_PACKAGES_PATH), "Backup")
+BACKUP_DIR = os.path.abspath(os.path.join(INSTALLED_PACKAGES_PATH, "..", "Backup"))
 BUILD = int(sublime.version())
 PLATFORM = f"{sublime.platform()}-{sublime.arch()}"
 
@@ -22,9 +22,11 @@ DEFAULT_CHANNEL = (
     "/refs/heads/master/channel.json"
 )
 
-ROOT_DIR = os.path.join(CACHE_PATH, PACKAGE)
+CACHE_DIR = os.path.join(CACHE_PATH, PACKAGE)
+ROOT_DIR = os.path.abspath(os.path.join(CACHE_PATH, "..", "Package Storage", PACKAGE))
+PACKAGE_DIR = os.path.join(PACKAGES_PATH, PACKAGE)
 PACKAGES_REPOSITORY = os.path.join(ROOT_DIR, "repository.json")
-PACKAGE_CONTROL_OVERRIDE = os.path.join(PACKAGES_PATH, PACKAGE, "Package Control.sublime-settings")
+PACKAGE_CONTROL_OVERRIDE = os.path.join(CACHE_DIR, "Package Control.sublime-settings")
 REGISTRY_URL = (
     "https://github.com/kaste/Package-x-Control/"
     "releases/download/registry-latest/registry.json"

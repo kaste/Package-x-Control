@@ -1,14 +1,17 @@
 from __future__ import annotations
 import json
 import os
+import shutil
 import urllib.parse
 
 import sublime
 
 from .config import (
+    CACHE_DIR,
     BUILD,
     PACKAGE_CONTROL_OVERRIDE,
     PACKAGE_CONTROL_PREFERENCES,
+    PACKAGE_DIR,
     PACKAGES_REPOSITORY,
     PACKAGE_SETTINGS,
     PACKAGE_SETTINGS_LISTENER_KEY,
@@ -19,6 +22,7 @@ from .glue_code import check_all_managed_packages_for_updates
 from .the_registry import fetch_registry
 from .repository import ensure_repository_registry
 from .runtime import determine_thread_names, run_on_executor
+from .utils import rmtree
 from .dashboard import *  # noqa: F403  # loads the commands and event listeners
 from . import dashboard
 
@@ -38,9 +42,11 @@ PACKAGE_CONTROL_OVERRIDE_TEMPLATE: dict[str, object] = {
 
 def boot():
     determine_thread_names()
+    migrate_1()
 
-    # Ensure our working directory exists
+    # Ensure our working directories exist
     os.makedirs(ROOT_DIR, exist_ok=True)
+    os.makedirs(PACKAGE_DIR, exist_ok=True)
 
     # Ensure our repository file exists
     ensure_repository_registry(PACKAGES_REPOSITORY)
@@ -75,6 +81,35 @@ def boot():
     run_on_executor(check_all_managed_packages_for_updates)
     # sublime.set_timeout_async(
     #     lambda: run_on_executor(fetch_packages, BUILD, PLATFORM, dprint, force=True), 1000)
+
+
+def migrate_1():
+    # Migrate CACHE_DIR to ROOT_DIR after
+    # https://github.com/sublimehq/sublime_text/issues/6713
+    if os.path.exists(CACHE_DIR) and not os.path.exists(ROOT_DIR):
+        print(f"Migrate working dir to {ROOT_DIR}")
+        shutil.copytree(CACHE_DIR, ROOT_DIR)
+        if not rmtree(CACHE_DIR):
+            print(f"Failed to remove {CACHE_DIR}.  Will retry on next restart.")
+    elif os.path.exists(CACHE_DIR) and os.path.exists(os.path.join(CACHE_DIR, "repository.json")):
+        if not rmtree(CACHE_DIR):
+            print(f"Failed to remove {CACHE_DIR}.  Will retry on next restart.")
+
+    s = sublime.load_settings(PACKAGE_CONTROL_PREFERENCES)
+    repositories: list[str] = s.get("repositories", [])
+    old_packages_repository = os.path.join(CACHE_DIR, "repository.json")
+    if old_packages_repository in repositories:
+        repositories.remove(old_packages_repository)
+        modified = True
+        s.set("repositories", repositories)
+        sublime.save_settings(PACKAGE_CONTROL_PREFERENCES)
+
+    old_package_control_override = os.path.join(PACKAGE_DIR, "Package Control.sublime-settings")
+    if os.path.exists(old_package_control_override):
+        try:
+            os.remove(old_package_control_override)
+        except Exception:
+            print(f"Failed to remove {old_package_control_override}.  Will retry on next restart.")
 
 
 def unboot():
