@@ -51,7 +51,7 @@ def fetch_registry(
     now = time.monotonic()
 
     json_string = http_get_(REGISTRY_URL)
-    packages_ = json.loads(json_string)
+    packages_ = json.loads(json_string).get("packages", [])
     log(f"{len(packages_)} packages in total.")
 
     packages = prepare_packages_data(packages_, build, platform, log)

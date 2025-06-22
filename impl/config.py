@@ -28,6 +28,6 @@ DEFAULT_CHANNEL = (
     "/refs/heads/master/channel.json"
 )
 REGISTRY_URL = (
-    "https://github.com/kaste/Package-x-Control/"
-    "releases/download/registry-latest/registry.json"
+    "https://github.com/packagecontrol/thecrawl/releases/download/"
+    "crawler-status/registry.json"
 )
