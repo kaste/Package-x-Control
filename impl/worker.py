@@ -57,7 +57,7 @@ class TopicTask(Generic[T]):
 
 
 KEEP_ALIVE_TIME = 10.0
-MAX_WORKERS = 8
+MAX_WORKERS = 4
 queue: list[TopicTask] = []
 running_topics: set[str] = set()
 running_workers: list[Worker] = []
