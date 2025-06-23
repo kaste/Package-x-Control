@@ -144,7 +144,7 @@ def orchestrator(  # noqa: E302
     return decorator
 
 
-PackageControlFx = Topic("package_control_fx")
+PackageControlFx = Orchestrator("package_control_fx")
 
 
 def replace_or_add_task(

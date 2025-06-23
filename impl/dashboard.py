@@ -39,7 +39,7 @@ from .utils import (
     drop_falsy, format_items, human_date, remove_suffix,
     rmfile, rmtree, show_actions_panel, show_input_panel
 )
-from . import worker
+from .worker import PackageControlFx
 from . import app_state
 from .app_state import PackageInfo, State
 
@@ -277,10 +277,9 @@ class pxc_install_package(sublime_plugin.TextCommand):
                     "refs": refs or package_control_entry["refs"],   # type: ignore[typeddict-item]
                     "unpacked": False
                 }
-                worker.add_task("package_control_fx", install_package_fx_, package_entry)
+                PackageControlFx.enqueue(install_package_fx_, package_entry)
             else:
-                worker.add_task(
-                    "package_control_fx",
+                PackageControlFx.enqueue(
                     install_proprietary_package_fx_,
                     package_control_entry["name"]
                 )
@@ -288,7 +287,7 @@ class pxc_install_package(sublime_plugin.TextCommand):
             def install_from_git(package_entry: PackageConfiguration, new_name: str = None):
                 if new_name:
                     package_entry["name"] = new_name
-                worker.add_task("package_control_fx", install_package_fx_, package_entry)
+                PackageControlFx.enqueue(install_package_fx_, package_entry)
 
             kont = partial(install_from_git, {
                 "name": final_name,
@@ -339,7 +338,7 @@ class pxc_update_package(sublime_plugin.TextCommand):
             name = extract_repo_name(package)
             for entry in entries:
                 if entry["name"] == name:
-                    worker.add_task("package_control_fx", fx_, entry)
+                    PackageControlFx.enqueue(fx_, entry)
                     break
             else:
                 print(f"fatal: {name} not found in the PxC-settings")
@@ -385,9 +384,9 @@ class pxc_remove_package(sublime_plugin.TextCommand):
                 view.show_popup("Not implemented for packages that are checked out.")
                 continue
             if section == "controlled_by_us":
-                worker.add_task("package_control_fx", remove_package_fx_, info["name"])
+                PackageControlFx.enqueue(remove_package_fx_, info["name"])
             elif section == "controlled_by_pc":
-                worker.add_task("package_control_fx", remove_proprietary_package_fx_, info["name"])
+                PackageControlFx.enqueue(remove_proprietary_package_fx_, info["name"])
             else:
                 raise RuntimeError("this else should be unreachable")
 
@@ -460,8 +459,7 @@ class pxc_check_out_package(sublime_plugin.TextCommand):
             if section == "controlled_by_us":
                 for entry in entries:
                     if entry["name"] == package:
-                        worker.add_task(
-                            "package_control_fx",
+                        PackageControlFx.enqueue(
                             checkout_package_fx_,
                             package,
                             entry["url"]
@@ -483,8 +481,7 @@ class pxc_check_out_package(sublime_plugin.TextCommand):
                     )
                     continue
                 else:
-                    worker.add_task(
-                        "package_control_fx",
+                    PackageControlFx.enqueue(
                         checkout_package_fx_,
                         package,
                         package_control_entry["git_url"]  # type: ignore[typeddict-item]
@@ -534,9 +531,9 @@ class pxc_toggle_disable_package(sublime_plugin.TextCommand):
             app_state.refresh()
 
         if to_enable:
-            worker.add_task("package_control_fx", fx_, True, to_enable)
+            PackageControlFx.enqueue(fx_, True, to_enable)
         if to_disable:
-            worker.add_task("package_control_fx", fx_, False, to_disable)
+            PackageControlFx.enqueue(fx_, False, to_disable)
 
 
 HUBS = [
