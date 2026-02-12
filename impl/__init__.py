@@ -20,7 +20,7 @@ from .config import (
 )
 from .glue_code import check_all_managed_packages_for_updates
 from .the_registry import fetch_registry
-from .repository import ensure_repository_registry
+from .repository import ensure_repository_registry, path_to_file_url
 from .runtime import determine_thread_names, run_on_executor
 from .utils import rmtree
 from .dashboard import *  # noqa: F403  # loads the commands and event listeners
@@ -54,10 +54,14 @@ def boot():
     # Ensure our repository is registered
     s = sublime.load_settings(PACKAGE_CONTROL_PREFERENCES)
     repositories = s.get("repositories", [])
+    packages_repository_url = path_to_file_url(PACKAGES_REPOSITORY)
     modified = False
-    if PACKAGES_REPOSITORY not in repositories:
+    if packages_repository_url not in repositories:
         modified = True
-        repositories.append(PACKAGES_REPOSITORY)
+        repositories.append(packages_repository_url)
+    if PACKAGES_REPOSITORY in repositories:
+        modified = True
+        repositories.remove(PACKAGES_REPOSITORY)
     if modified:
         s.set("repositories", repositories)
         sublime.save_settings(PACKAGE_CONTROL_PREFERENCES)
