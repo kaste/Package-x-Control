@@ -339,12 +339,7 @@ def refresh_installed_packages(state: State, set_state: StateSetter, pm: Package
         metadata = pm.get_metadata(package_name)
         if (
             not metadata
-            or (
-                os.path.exists(os.path.join(PACKAGES_PATH, package_name, ".git"))
-                and not os.path.exists(os.path.join(
-                    PACKAGES_PATH, package_name, "package-metadata.json")
-                )
-            )
+            and os.path.exists(os.path.join(PACKAGES_PATH, package_name, ".git"))
         ):
             info = {
                 "name": package_name,
