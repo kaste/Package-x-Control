@@ -62,12 +62,6 @@ def boot():
         s.set("repositories", repositories)
         sublime.save_settings(PACKAGE_CONTROL_PREFERENCES)
 
-    # Delay monkey-patching or it won't work.
-    # Must be something with PC doing its own boot delayed.
-    sublime.set_timeout_async(
-        lambda: ensure_package_managers_http_get_is_patched(), 2000)
-    # ensure_package_managers_http_get_is_patched()
-
     # Ensure local Package Control Preferences exist
     pc_settings_override = os.path.join(PACKAGE_CONTROL_OVERRIDE)
     if not os.path.exists(pc_settings_override):
@@ -115,26 +109,3 @@ def migrate_1():
 def unboot():
     # sublime.load_settings(PACKAGE_SETTINGS).clear_on_change(PACKAGE_SETTINGS_LISTENER_KEY)
     ...
-
-
-def ensure_package_managers_http_get_is_patched():
-    from package_control import package_manager
-
-    try:
-        original_http_get = package_manager.http_get.__wrapped__
-    except AttributeError:
-        original_http_get = package_manager.http_get
-
-    def patched_http_get(url, settings, error_message="", prefer_cached=False):
-        if url.startswith("file:///"):
-            with open(urllib.parse.unquote(url[8:]), "rb") as f:
-                return f.read()
-
-        return original_http_get(url, settings, error_message, prefer_cached)
-
-    patched_http_get.__wrapped__ = original_http_get  # type: ignore[attr-defined]
-    print(
-        "Package Control X: patch package_control.package_manager.http_get "
-        "to support file URL's."
-    )
-    package_manager.http_get = patched_http_get
