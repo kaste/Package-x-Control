@@ -1,18 +1,15 @@
 from __future__ import annotations
 from contextlib import contextmanager
+import importlib
 from functools import partial
 import json
 import os
 import shutil
 import stat
 
-from typing import Callable
+from typing import Any, Callable
 
 import sublime
-
-from package_control.package_disabler import PackageDisabler
-from package_control.package_tasks import PackageTaskRunner
-from package_control.activity_indicator import ActivityIndicator
 
 from .config import BUILD, PACKAGE_CONTROL_OVERRIDE, PACKAGES_REPOSITORY, ROOT_DIR
 from .config_management import (
@@ -32,6 +29,13 @@ from .repository import (
 from .runtime import gather
 from .utils import remove_suffix
 from . import worker
+
+PackageDisabler = \
+    importlib.import_module('Package Control.package_control.package_disabler').PackageDisabler
+PackageTaskRunner = \
+    importlib.import_module('Package Control.package_control.package_tasks').PackageTaskRunner
+ActivityIndicator: Any = \
+    importlib.import_module('Package Control.package_control.activity_indicator').ActivityIndicator
 
 
 _check_package  = partial(check_package,  root_dir=ROOT_DIR, st_build=BUILD, Git=GitCallable)  # noqa: E221, E241, E501

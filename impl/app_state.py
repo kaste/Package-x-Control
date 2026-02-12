@@ -3,16 +3,16 @@ from __future__ import annotations
 from collections import deque
 from concurrent.futures import as_completed, Future
 from datetime import datetime, timezone
+import importlib
 import os
 import traceback
 
 from typing import (
-    Callable, Literal, NamedTuple, TypedDict, Optional
+    Any, Callable, Literal, NamedTuple, TypedDict, Optional
 )
 from typing_extensions import TypeAlias
 
 import sublime
-from package_control.package_manager import PackageManager
 
 from .config import (
     BUILD, PACKAGE_CONTROL_PREFERENCES,
@@ -30,6 +30,9 @@ from .runtime import cooperative, gather, on_ui, AWAIT_UI
 from .the_registry import fetch_registry, PackageDb
 from .utils import isjunction, remove_prefix
 from . import worker
+
+PackageManager: Any = \
+    importlib.import_module('Package Control.package_control.package_manager').PackageManager
 
 
 class VersionDescription(NamedTuple):
@@ -189,7 +192,6 @@ def refresh_our_packages(state: State, set_state: StateSetter, pm: PackageManage
         worker.add_task(entry["name"], fetch_package_info, entry, i)
         for i, entry in enumerate(entries)
     ])
-
 
 
 def fast_state(state: State, set_state: StateSetter):

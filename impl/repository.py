@@ -1,5 +1,6 @@
 from __future__ import annotations
 from contextlib import contextmanager
+import importlib
 import json
 import os
 import time
@@ -8,11 +9,12 @@ import urllib.request
 from typing import TypedDict
 from typing_extensions import NotRequired, Required, TypeAlias
 
-from package_control.cache import clear_cache
 
 from .config_management import extract_repo_name, extract_user
 from .git_package import InstallablePackage, Version, strip_possible_prefix
 from .utils import remove_prefix
+
+clear_cache = importlib.import_module('Package Control.package_control.cache').clear_cache
 
 
 REPOSITORY_TEMPLATE = {

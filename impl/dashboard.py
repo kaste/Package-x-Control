@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import TimeoutError
 from functools import partial
+import importlib
 from itertools import chain
 import os
 from textwrap import wrap
@@ -15,9 +16,6 @@ from typing import (
 
 import sublime
 import sublime_plugin
-
-from package_control.activity_indicator import ActivityIndicator
-from package_control.package_manager import PackageManager
 
 from .config import (
     BACKUP_DIR, INSTALLED_PACKAGES_PATH, PACKAGE_CONTROL_PREFERENCES,
@@ -42,6 +40,11 @@ from .utils import (
 from .worker import PackageControlFx
 from . import app_state
 from .app_state import PackageInfo, State
+
+ActivityIndicator = \
+    importlib.import_module('Package Control.package_control.activity_indicator').ActivityIndicator
+PackageManager = \
+    importlib.import_module('Package Control.package_control.package_manager').PackageManager
 
 
 __all__ = (

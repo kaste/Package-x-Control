@@ -1,5 +1,6 @@
 from __future__ import annotations
 from collections import defaultdict
+import importlib
 from functools import lru_cache
 import os
 import re
@@ -13,11 +14,11 @@ import sublime_plugin
 
 from .config_management import PackageConfiguration
 from .utils import drop_falsy, human_date, remove_lr, remove_prefix
-from package_control.pep440 import PEP440Version
 
-
-from typing import Literal, NamedTuple, TypedDict, TypeVar
+from typing import Any, Literal, NamedTuple, TypedDict, TypeVar
 from typing_extensions import Required, TypeAlias
+
+PEP440Version: Any = importlib.import_module('Package Control.package_control.pep440').PEP440Version
 
 
 PACKAGE_NAME = "Package Control X"
