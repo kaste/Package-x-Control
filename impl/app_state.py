@@ -8,7 +8,7 @@ import os
 import traceback
 
 from typing import (
-    Any, Callable, Literal, NamedTuple, TypedDict, Optional
+    Any, Callable, Iterable, Literal, NamedTuple, TypedDict, Optional
 )
 from typing_extensions import TypeAlias
 
@@ -113,15 +113,34 @@ def refresh() -> None:
         "refresh_unmanaged_packages:orchestrator", refresh_unmanaged_packages, state, set_state)
 
 
+def append_status_message(message: str, with_timestamp: bool = True) -> None:
+    append_status_messages([message], with_timestamp=with_timestamp)
+
+
+def append_status_messages(
+    messages: Iterable[str], with_timestamp: bool = True
+) -> None:
+    messages = list(messages)
+    if not messages:
+        return
+
+    d = state["status_messages"]
+    if with_timestamp:
+        d.append(f"[{datetime.now():%d.%m.%Y %H:%M}]")
+    d.extend(messages)
+    set_state({"status_messages": d})
+
+
 @cooperative
 def fetch_registered_packages(state: State, set_state: StateSetter):
+    has_logged = False
+
     @on_ui
     def printer(message: str):
-        d = state["status_messages"]
-        d.append(message)
-        set_state({"status_messages": d})
+        nonlocal has_logged
+        append_status_message(message, with_timestamp=not has_logged)
+        has_logged = True
 
-    printer(f"[{datetime.now():%d.%m.%Y %H:%M}]")
     packages = fetch_registry(BUILD, PLATFORM, printer)
     yield AWAIT_UI   # ensure ordered update: the data *before* the future
     set_state({"registered_packages": packages})

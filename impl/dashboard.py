@@ -260,7 +260,7 @@ class pxc_install_package(sublime_plugin.TextCommand):
 
         def log_fx_(name: str):
             message = f"Installed {name}."
-            app_state.state["status_messages"].append(message)
+            app_state.append_status_message(message)
             app_state.refresh()
 
         def lookup_by_encoded_name_in_url(name: str) -> PackageControlEntry | None:
@@ -394,7 +394,7 @@ class pxc_update_package(sublime_plugin.TextCommand):
         def fx_(entry: PackageConfiguration):
             install_package(entry)
             message = f"Updated {entry['name']}."
-            app_state.state["status_messages"].append(message)
+            app_state.append_status_message(message)
             app_state.refresh()
 
         config_data = get_configuration()
@@ -439,13 +439,13 @@ class pxc_remove_package(sublime_plugin.TextCommand):
         def remove_package_fx_(name: str):
             remove_package_by_name(name)
             message = f"Removed {name}."
-            app_state.state["status_messages"].append(message)
+            app_state.append_status_message(message)
             app_state.refresh()
 
         def remove_proprietary_package_fx_(name: str):
             remove_proprietary_package_by_name(name)
             message = f"Removed {name}."
-            app_state.state["status_messages"].append(message)
+            app_state.append_status_message(message)
             app_state.refresh()
 
         for package in get_selected_packages(view):
@@ -564,7 +564,7 @@ def install_package_as_git_clone(
             print("Failed to remove {package_file}.  Should work anyway.")
 
     message = f"Unpacked {name}."
-    app_state.state["status_messages"].append(message)
+    app_state.append_status_message(message)
     app_state.refresh()
 
 
@@ -605,7 +605,7 @@ class pxc_toggle_disable_package(sublime_plugin.TextCommand):
             fn(package_names)
             En = "En" if enable else "Dis"
             message = f"{En}abled {format_items(package_names)}."
-            app_state.state["status_messages"].append(message)
+            app_state.append_status_message(message)
             app_state.refresh()
 
         if to_enable:
