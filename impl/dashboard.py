@@ -234,6 +234,11 @@ class pxc_install_package(sublime_plugin.TextCommand):
             ensure_package_is_enabled(name)
             log_fx_(name)
 
+        def install_unpacked_package_fx_(name: str, git_url: str):
+            print("Install unpacked", name, git_url)
+            install_package_as_git_clone(window, view, name, git_url)
+            ensure_package_is_enabled(name)
+
         def maybe_handover_control_from_pc(name: str):
             s = sublime.load_settings(PACKAGE_CONTROL_PREFERENCES)
             installed_packages = set(s.get("installed_packages", []))
@@ -274,10 +279,30 @@ class pxc_install_package(sublime_plugin.TextCommand):
         package_entry: PackageConfiguration
         if package_control_entry:
             if "git_url" in package_control_entry:
+                git_url = url or package_control_entry["git_url"]
+                if compatibility := package_control_entry.get("compatibility"):
+                    show_actions_panel(window, [
+                        (
+                            "Abort, the package "
+                            f"\"{package_control_entry['name']}\" claims to be "
+                            f"{compatibility}.",
+                            lambda: None
+                        ),
+                        (
+                            "Install anyway but as a git clone.",
+                            lambda: PackageControlFx.enqueue(
+                                install_unpacked_package_fx_,
+                                package_control_entry["name"],
+                                git_url
+                            )
+                        )
+                    ])
+                    return
+
                 package_entry = {
                     "name": package_control_entry["name"],
-                    "url": url or package_control_entry["git_url"],  # type: ignore[typeddict-item]
-                    "refs": refs or package_control_entry["refs"],   # type: ignore[typeddict-item]
+                    "url": git_url,
+                    "refs": refs or package_control_entry["refs"],
                     "unpacked": False
                 }
                 PackageControlFx.enqueue(install_package_fx_, package_entry)
@@ -414,36 +439,7 @@ class pxc_check_out_package(sublime_plugin.TextCommand):
             return None
 
         def checkout_package_fx_(name: str, git_url: str):
-            target_dir = os.path.join(PACKAGES_PATH, name)
-            if os.path.exists(target_dir):
-                pm = PackageManager()
-                if not pm.backup_package_dir(name):
-                    view.show_popup(
-                        "fatal: the target dir already exists and could not be backed up."
-                    )
-                    return
-                print(f"{name} backed up into {BACKUP_DIR}")
-
-                if not rmtree(target_dir):
-                    view.show_popup(
-                        "fatal: the target dir could not be removed."
-                    )
-                    return
-
-            if window.folders() or len(window.views()) > 1:
-                target_window = open_new_window()
-            else:
-                target_window = window
-            clone_package_to_window(target_window, git_url, target_dir)
-
-            package_file = os.path.join(INSTALLED_PACKAGES_PATH, f"{name}.sublime-package")
-            if os.path.exists(package_file):
-                if not rmfile(package_file):
-                    print("Failed to remove {package_file}.  Should work anyway.")
-
-            message = f"Unpacked {name}."
-            app_state.state["status_messages"].append(message)
-            app_state.refresh()
+            install_package_as_git_clone(window, view, name, git_url)
 
         config_data = get_configuration()
         entries = process_config(config_data)
@@ -491,6 +487,39 @@ class pxc_check_out_package(sublime_plugin.TextCommand):
                     )
             else:
                 raise RuntimeError("this else should be unreachable")
+
+
+def install_package_as_git_clone(
+    window: sublime.Window, view: sublime.View, name: str, git_url: str
+) -> None:
+    target_dir = os.path.join(PACKAGES_PATH, name)
+    if os.path.exists(target_dir):
+        pm = PackageManager()
+        if not pm.backup_package_dir(name):
+            view.show_popup(
+                "fatal: the target dir already exists and could not be backed up."
+            )
+            return
+        print(f"{name} backed up into {BACKUP_DIR}")
+
+        if not rmtree(target_dir):
+            view.show_popup("fatal: the target dir could not be removed.")
+            return
+
+    if window.folders() or len(window.views()) > 1:
+        target_window = open_new_window()
+    else:
+        target_window = window
+    clone_package_to_window(target_window, git_url, target_dir)
+
+    package_file = os.path.join(INSTALLED_PACKAGES_PATH, f"{name}.sublime-package")
+    if os.path.exists(package_file):
+        if not rmfile(package_file):
+            print("Failed to remove {package_file}.  Should work anyway.")
+
+    message = f"Unpacked {name}."
+    app_state.state["status_messages"].append(message)
+    app_state.refresh()
 
 
 def clone_package_to_window(window, git_url: str, target_dir: str):

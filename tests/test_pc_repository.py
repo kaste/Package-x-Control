@@ -119,6 +119,17 @@ class TestConfigManagement(DeferrableTestCase):
             "heads/master"
         ),
         (
+            [
+                {
+                    "sublime_text": "<3000",
+                    "branch": "master"
+                }
+            ],
+            4175,
+            "windows-x64",
+            "the-default"
+        ),
+        (
             [  # "tags" key is missing!
                 {
                     "sublime_text": "<3000",
@@ -140,3 +151,40 @@ class TestConfigManagement(DeferrableTestCase):
             releases, build, platform, default="the-default"
         )
         self.assertEqual(expected, actual)
+
+    def test_warn_if_registry_entry_is_incompatible_with_st_build(self):
+        actual = plugin.compatibility_problem_from_releases(
+            [{"sublime_text": "<3000", "branch": "master"}],
+            4175,
+            "windows-x64"
+        )
+
+        self.assertEqual("compatible with ST2 only", actual)
+
+    def test_warn_if_registry_entry_is_incompatible_with_platform(self):
+        actual = plugin.compatibility_problem_from_releases(
+            [{"sublime_text": "*", "platforms": ["osx"], "tags": True}],
+            4175,
+            "windows-x64"
+        )
+
+        self.assertEqual("compatible with osx only", actual)
+
+    def test_prepare_packages_data_keeps_incompatibility_info(self):
+        actual = plugin.prepare_packages_data([
+            {
+                "name": "GoToFile",
+                "details": "https://github.com/gs/sublime-text-go-to-file",
+                "releases": [{"sublime_text": "<3000", "branch": "master"}],
+            }
+        ], 4175, "windows-x64", lambda _: None)
+
+        self.assertEqual(
+            {
+                "name": "GoToFile",
+                "git_url": "https://github.com/gs/sublime-text-go-to-file.git",
+                "refs": "tags/*",
+                "compatibility": "compatible with ST2 only",
+            },
+            actual["GoToFile"]
+        )

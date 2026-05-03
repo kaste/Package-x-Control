@@ -9,7 +9,7 @@ import urllib.error
 import urllib.request
 
 from typing import Callable, TypedDict
-from typing_extensions import Required, TypeAlias
+from typing_extensions import NotRequired, Required, TypeAlias
 
 from .config import REGISTRY_URL, ROOT_DIR
 from .utils import format_items
@@ -23,6 +23,7 @@ class GitInstallablePackage(TypedDict, total=False):
     name: Required[str]
     git_url: Required[str]
     refs: Required[str]
+    compatibility: NotRequired[str]
 
 
 LogWriter: TypeAlias = Callable[[str], None]
@@ -143,8 +144,13 @@ def prepare_packages_data(
                 continue
         info = {"name": name}
         if git_url := website_to_https_git(website):
+            releases = p.get("releases", [])
             info["git_url"] = git_url
-            info["refs"] = compute_refs_from_releases(p.get("releases", []), build, platform)
+            info["refs"] = compute_refs_from_releases(releases, build, platform)
+            if compatibility := compatibility_problem_from_releases(
+                releases, build, platform
+            ):
+                info["compatibility"] = compatibility
         else:
             proprietary.append(name)
 
@@ -217,22 +223,71 @@ def compute_refs_from_releases(
         if not _fulfills_platform_requirement(requirement, platform):
             continue
 
-        if "tags" in release:
-            if isinstance(release["tags"], bool):
-                return "tags/*"
-            elif re.match(r'^(st\d+-|\d+-)', release["tags"]):
-                # We support "st3-", "4070-", or "st4651" prefixes
-                # out-of-the-box, t.i. we match the build without
-                # needing any metadata.
-                return "tags/*"
-            elif isinstance(release["tags"], str):
-                return f"tags/{release['tags']}*"
-        elif "branch" in release:
-            return f"heads/{release['branch']}"
+        if ref := refs_from_release(release):
+            return ref
 
-    # Default if no matching release found?
-    # The user knows the package and overrules the requirements?
+    # The dashboard warns before using this for incompatible packages.
     return default
+
+
+def refs_from_release(release: dict) -> str:
+    if "tags" in release:
+        if isinstance(release["tags"], bool):
+            return "tags/*"
+        elif re.match(r'^(st\d+-|\d+-)', release["tags"]):
+            # We support "st3-", "4070-", or "st4651" prefixes
+            # out-of-the-box, t.i. we match the build without
+            # needing any metadata.
+            return "tags/*"
+        elif isinstance(release["tags"], str):
+            return f"tags/{release['tags']}*"
+    elif "branch" in release:
+        return f"heads/{release['branch']}"
+    return ""
+
+
+def compatibility_problem_from_releases(
+    releases: list[dict], build: int, platform: str
+) -> str:
+    installable_releases = [r for r in releases if refs_from_release(r)]
+    if not installable_releases:
+        return ""
+
+    if any(
+        _fulfills_build_requirement(r.get("sublime_text", "*"), build)
+        and _fulfills_platform_requirement(r.get("platforms", "*"), platform)
+        for r in installable_releases
+    ):
+        return ""
+
+    build_compatible_releases = [
+        r for r in installable_releases
+        if _fulfills_build_requirement(r.get("sublime_text", "*"), build)
+    ]
+    if build_compatible_releases:
+        platforms = [r.get("platforms", "*") for r in build_compatible_releases]
+        return f"compatible with {describe_platforms(platforms)} only"
+
+    requirements = [r.get("sublime_text", "*") for r in installable_releases]
+    return f"compatible with {describe_build_requirements(requirements)} only"
+
+
+def describe_build_requirements(requirements: list[str]) -> str:
+    normalized = sorted({requirement.replace(" ", "") for requirement in requirements})
+    if normalized == ["<3000"]:
+        return "ST2"
+    return "ST builds " + format_items(normalized, last_sep=" or ")
+
+
+def describe_platforms(platforms: list[str | list[str]]) -> str:
+    normalized = sorted({
+        platform
+        for requirement in platforms
+        for platform in (
+            requirement if isinstance(requirement, list) else [requirement]
+        )
+    })
+    return format_items(normalized, last_sep=" or ")
 
 
 def _fulfills_build_requirement(requirement: str, build: int) -> bool:
