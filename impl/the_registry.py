@@ -135,6 +135,9 @@ def prepare_packages_data(
     rv = {}
     proprietary = []
     for p in packages:
+        if p.get("removed"):
+            continue
+
         name = p.get("name")
         website = p.get("details") or p.get("homepage") or ""
         if not name:

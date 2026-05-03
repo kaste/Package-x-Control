@@ -188,3 +188,22 @@ class TestConfigManagement(DeferrableTestCase):
             },
             actual["GoToFile"]
         )
+
+    def test_prepare_packages_data_skips_removed_tombstones(self):
+        messages = []
+        actual = plugin.prepare_packages_data([
+            {
+                "name": "Zap Gremlins",
+                "first_seen": "2012-06-11T00:53:43Z",
+                "removed": "2026-04-14T04:24:28Z",
+                "labels": [],
+            },
+            {
+                "name": "Live Proprietary",
+                "homepage": "https://example.com",
+            },
+        ], 4175, "windows-x64", messages.append)
+
+        self.assertNotIn("Zap Gremlins", actual)
+        self.assertEqual({"name": "Live Proprietary"}, actual["Live Proprietary"])
+        self.assertEqual(["Live Proprietary is proprietary"], messages)
