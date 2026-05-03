@@ -59,9 +59,12 @@ class TopicTask(Generic[T]):
 KEEP_ALIVE_TIME = 10.0
 MAX_WORKERS = 4
 STATUS_KEY = "0_pxc"
+STATUS_BLINK_INTERVAL = 500
 queue: list[TopicTask] = []
 running_topics: set[str] = set()
 running_workers: list[Worker] = []
+status_blink_on = True
+status_blink_scheduled = False
 
 
 class Topic:
@@ -267,9 +270,15 @@ def get_idle_worker(orchestrator: bool):
 
 
 def update_status_bar() -> None:
+    global status_blink_on
     assert_it_runs_on_ui()
 
-    text = worker_status_text(len(running_workers), workload_size())
+    open_threads = len(running_workers)
+    workload = workload_size()
+    if not status_is_waiting(open_threads, workload):
+        status_blink_on = True
+
+    text = worker_status_text(open_threads, workload, status_blink_on)
     for window in sublime.windows():
         for view in window.views():
             if text:
@@ -277,12 +286,40 @@ def update_status_bar() -> None:
             else:
                 view.erase_status(STATUS_KEY)
 
+    if status_is_waiting(open_threads, workload):
+        ensure_status_blink()
 
-def worker_status_text(open_threads: int, workload: int) -> str:
+
+def worker_status_text(open_threads: int, workload: int, blink_on: bool = True) -> str:
     if open_threads <= 0:
         return ""
+    if workload:
+        return f"({workload}/{open_threads})"
 
-    return f"({workload or '*'}/{open_threads})"
+    return f"({'*' if blink_on else ' '}/{open_threads})"
+
+
+def status_is_waiting(open_threads: int, workload: int) -> bool:
+    return open_threads > 0 and workload == 0
+
+
+def ensure_status_blink() -> None:
+    global status_blink_scheduled
+    if status_blink_scheduled:
+        return
+
+    status_blink_scheduled = True
+    sublime.set_timeout(_blink_status_bar, STATUS_BLINK_INTERVAL)
+
+
+def _blink_status_bar() -> None:
+    global status_blink_on, status_blink_scheduled
+    status_blink_scheduled = False
+    if status_is_waiting(len(running_workers), workload_size()):
+        status_blink_on = not status_blink_on
+    else:
+        status_blink_on = True
+    update_status_bar()
 
 
 def workload_size() -> int:
