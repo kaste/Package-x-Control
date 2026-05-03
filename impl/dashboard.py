@@ -3,10 +3,12 @@ from __future__ import annotations
 from concurrent.futures import TimeoutError
 from functools import partial
 import importlib
+import json
 from itertools import chain
 import os
 from textwrap import wrap
 import urllib.parse
+import urllib.request
 import re
 from webbrowser import open as open_in_browser
 
@@ -18,8 +20,8 @@ import sublime
 import sublime_plugin
 
 from .config import (
-    BACKUP_DIR, INSTALLED_PACKAGES_PATH, PACKAGE_CONTROL_PREFERENCES,
-    PACKAGES_PATH,
+    BACKUP_DIR, BUILD, INSTALLED_PACKAGES_PATH, PACKAGE_CONTROL_PREFERENCES,
+    PACKAGES_PATH, PLATFORM,
 )
 from .config_management import (
     PackageConfiguration,
@@ -31,7 +33,10 @@ from .glue_code import (
     install_package, install_proprietary_package,
     remove_package_by_name, remove_proprietary_package_by_name
 )
-from .the_registry import extract_name_from_url, PackageControlEntry
+from .the_registry import (
+    compatibility_problem_from_releases, compute_refs_from_releases,
+    extract_name_from_url, PackageControlEntry,
+)
 from .runtime import cooperative, AWAIT_UI, AWAIT_WORKER
 from .utils import (
     drop_falsy, format_items, human_date, remove_suffix,
@@ -263,6 +268,49 @@ class pxc_install_package(sublime_plugin.TextCommand):
                     if extract_name_from_url(p["git_url"]) == name:  # type: ignore[typeddict-item]
                         return p
             return None
+
+        def install_channel_pr_package_fx_(
+            package_entry: PackageConfiguration, compatibility: str
+        ):
+            if compatibility:
+                show_actions_panel(window, [
+                    (
+                        "Abort, the package "
+                        f"\"{package_entry['name']}\" claims to be "
+                        f"{compatibility}.",
+                        lambda: None
+                    ),
+                    (
+                        "Install anyway.",
+                        lambda: PackageControlFx.enqueue(
+                            install_package_fx_, package_entry
+                        )
+                    )
+                ])
+            else:
+                PackageControlFx.enqueue(install_package_fx_, package_entry)
+
+        if channel_pr_url := parse_package_control_channel_pr_url(name):
+            yield AWAIT_WORKER
+            try:
+                package_info = package_info_from_channel_pr_url(channel_pr_url)
+            except Exception as ex:
+                yield AWAIT_UI
+                view.show_popup(
+                    f"Could not read Package Control channel PR: {ex}"
+                )
+                return
+
+            yield AWAIT_UI
+            if not package_info:
+                view.show_popup(
+                    "Could not find an added package in this "
+                    "Package Control channel PR."
+                )
+                return
+
+            install_channel_pr_package_fx_(*package_info)
+            return
 
         if url := parse_url_from_user_input(name):
             final_name = remove_suffix(url.rsplit("/", 1)[1], ".git")
@@ -570,6 +618,9 @@ HUBS = [
     "https://bitbucket.org/", "https://codeberg.org/"
 ]
 PACKAGE_CATALOG_HOSTS = {"packagecontrol.io", "packages.sublimetext.io"}
+GITHUB_HOSTS = {"github.com", "www.github.com"}
+PACKAGE_CONTROL_CHANNEL_OWNER = "sublimehq"
+PACKAGE_CONTROL_CHANNEL_REPO = "package_control_channel"
 
 
 def parse_package_name_from_package_catalog_url(clip_content: str) -> str:
@@ -590,6 +641,105 @@ def parse_package_name_from_package_catalog_url(clip_content: str) -> str:
     ):
         return urllib.parse.unquote(path_parts[1])
     return ""
+
+
+def parse_package_control_channel_pr_url(clip_content: str) -> str:
+    if not clip_content:
+        return ""
+
+    parsed = urllib.parse.urlparse(clip_content.strip())
+    path_parts = [part for part in parsed.path.split("/") if part]
+    if (
+        parsed.scheme in {"http", "https"}
+        and parsed.hostname in GITHUB_HOSTS
+        and len(path_parts) >= 4
+        and path_parts[:3] == [
+            PACKAGE_CONTROL_CHANNEL_OWNER,
+            PACKAGE_CONTROL_CHANNEL_REPO,
+            "pull"
+        ]
+    ):
+        pull_number = remove_suffix(path_parts[3], ".diff")
+        pull_number = remove_suffix(pull_number, ".patch")
+        if pull_number.isdecimal():
+            return (
+                "https://github.com/"
+                f"{PACKAGE_CONTROL_CHANNEL_OWNER}/"
+                f"{PACKAGE_CONTROL_CHANNEL_REPO}/pull/{pull_number}.diff"
+            )
+    return ""
+
+
+def package_info_from_channel_pr_url(
+    diff_url: str
+) -> tuple[PackageConfiguration, str] | None:
+    diff = http_get_text(diff_url)
+    channel_entry = parse_added_package_from_channel_diff(diff)
+    if not channel_entry:
+        return None
+
+    name = channel_entry.get("name")
+    details = channel_entry.get("details")
+    releases = channel_entry.get("releases", [])
+    if not isinstance(name, str):
+        raise ValueError("The added package does not have a string name.")
+    if not isinstance(details, str):
+        raise ValueError("The added package does not have a string details URL.")
+    if not isinstance(releases, list):
+        raise ValueError("The added package does not have a release list.")
+
+    git_url = parse_url_from_user_input(details)
+    if not git_url:
+        raise ValueError(f"Could not derive a git URL from {details!r}.")
+
+    return (
+        {
+            "name": name,
+            "url": git_url,
+            "refs": compute_refs_from_releases(releases, BUILD, PLATFORM),
+            "unpacked": False
+        },
+        compatibility_problem_from_releases(releases, BUILD, PLATFORM)
+    )
+
+
+def parse_added_package_from_channel_diff(diff: str) -> dict | None:
+    for block in iter_added_json_objects(diff):
+        try:
+            entry = json.loads(block)
+        except ValueError:
+            continue
+        if all(key in entry for key in ("name", "details", "releases")):
+            return entry
+    return None
+
+
+def iter_added_json_objects(diff: str) -> Iterator[str]:
+    block = []
+    depth = 0
+    for line in diff.splitlines():
+        if not line.startswith("+") or line.startswith("+++"):
+            continue
+
+        line = line[1:]
+        if not block and line.strip() != "{":
+            continue
+
+        block.append(line)
+        depth += line.count("{") - line.count("}")
+        if block and depth == 0:
+            text = "\n".join(block).strip()
+            if text.endswith(","):
+                text = text[:-1]
+            yield text
+            block = []
+
+
+def http_get_text(location: str) -> str:
+    headers = {"User-Agent": "Package x Control"}
+    req = urllib.request.Request(location, headers=headers)
+    with urllib.request.urlopen(req, timeout=30) as response:
+        return response.read().decode("utf-8")
 
 
 def parse_url_from_user_input(clip_content: str) -> str:
