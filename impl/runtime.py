@@ -60,7 +60,7 @@ def on_worker(fn: Callable[P, T]) -> Callable[P, None]:
 
 
 def it_runs_on_ui() -> bool:
-    return threading.current_thread().name == UI_THREAD_NAME
+    return threading.current_thread().name == UI_THREAD_NAME or not UI_THREAD_NAME
 
 
 def assert_it_runs_on_ui() -> None:
