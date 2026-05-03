@@ -883,6 +883,12 @@ def flash(view: sublime.View, message: str):
 def render(view: sublime.View, current_state: State, config: Config = DEFAULT_CONFIG) -> None:
     """Renders the dashboard content into the view based on the state."""
 
+    package_controlled_packages = current_state.get("package_controlled_packages", [])
+    unmanaged_packages = current_state.get("unmanaged_packages", [])
+    terse_name_width = calculate_shared_terse_name_width(
+        [package_controlled_packages, unmanaged_packages], config
+    )
+
     sections = drop_falsy((
         render_wide_section(
             "INSTALLED PACKAGES",
@@ -892,14 +898,15 @@ def render(view: sublime.View, current_state: State, config: Config = DEFAULT_CO
 
         render_terse_section(
             "PACKAGES BY PACKAGE CONTROL",
-            current_state.get("package_controlled_packages", []),
-            current_state, config=config
+            package_controlled_packages,
+            current_state, name_width=terse_name_width, config=config
         ),
 
         render_terse_section(
             "UNMANAGED PACKAGES",
-            current_state.get("unmanaged_packages", []),
-            current_state, mark_registered_packages=True, config=config
+            unmanaged_packages,
+            current_state, mark_registered_packages=True,
+            name_width=terse_name_width, config=config
         )
     ))
 
@@ -1067,6 +1074,7 @@ def format_package_wide(
 def render_terse_section(
     title: str, packages: list[PackageInfo], state: State,
     mark_registered_packages: bool = False,
+    name_width: int | None = None,
     config: Config = DEFAULT_CONFIG
 ) -> str:
     """
@@ -1076,7 +1084,8 @@ def render_terse_section(
     if not packages:
         return ""
 
-    name_width, version_width = calculate_terse_section_widths(packages, config)
+    calculated_name_width, version_width = calculate_terse_section_widths(packages, config)
+    name_width = name_width or calculated_name_width
     formatted_packages = [
         format_package_terse(
             pkg, name_width, version_width, state, mark_registered_packages, config
@@ -1207,6 +1216,19 @@ def calculate_wide_section_widths(
         config.WIDE_SECTION_MIN_VERSION_WIDTH
     )
     return name_width, version_width
+
+
+def calculate_shared_terse_name_width(
+    sections: Iterable[list[PackageInfo]], config: Config = DEFAULT_CONFIG
+) -> int:
+    return max(
+        (
+            calculate_terse_section_widths(packages, config)[0]
+            for packages in sections
+            if packages
+        ),
+        default=config.TERSE_SECTION_MIN_NAME_WIDTH
+    )
 
 
 def calculate_terse_section_widths(

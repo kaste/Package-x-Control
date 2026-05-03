@@ -117,3 +117,18 @@ class TestDashboard(DeferrableTestCase):
             "unpacked": False
         }, entry)
         self.assertEqual("", compatibility)
+
+
+    def test_calculate_shared_terse_name_width(self):
+        package_controlled_packages = [{"name": "Short"}]
+        unmanaged_packages = [{"name": "Much Longer Package"}]
+
+        actual = plugin.calculate_shared_terse_name_width([
+            package_controlled_packages,
+            unmanaged_packages
+        ])
+
+        self.assertEqual(
+            plugin.calculate_terse_section_widths(unmanaged_packages)[0],
+            actual
+        )
