@@ -42,7 +42,7 @@ from .utils import (
     drop_falsy, format_items, human_date, remove_suffix,
     rmfile, rmtree, show_actions_panel, show_input_panel
 )
-from .worker import PackageControlFx
+from .worker import PackageControlFx, update_status_bar
 from . import app_state
 from .app_state import PackageInfo, State
 
@@ -173,6 +173,7 @@ def prepare_view_settings(view: sublime.View, options: dict[str, object]) -> Non
 
 class pxc_listener(sublime_plugin.EventListener):
     def on_activated(self, view):
+        update_status_bar()
         # Refresh only if it's our dashboard and maybe needs updating
         if view_is_our_dashboard(view):
             app_state.refresh()

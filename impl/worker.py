@@ -58,6 +58,7 @@ class TopicTask(Generic[T]):
 
 KEEP_ALIVE_TIME = 10.0
 MAX_WORKERS = 4
+STATUS_KEY = "0_pxc"
 queue: list[TopicTask] = []
 running_topics: set[str] = set()
 running_workers: list[Worker] = []
@@ -200,6 +201,7 @@ def _add_task(task: TopicTask):
         schedule(worker, task)
     else:
         queue.append(task)
+    update_status_bar()
     # print("running_topics:", running_topics, "queue length:", len(queue))
 
 
@@ -215,6 +217,7 @@ def _tick(w, task):
                 break
     else:
         w.idle = True
+    update_status_bar()
     # print("running_topics:", running_topics, "queue length:", len(queue))
 
 
@@ -226,6 +229,7 @@ def _cancel_topic(topic: str):
         if task.topic == topic:
             task.future.cancel()
             print(f"Cancelled {task}", task.fn)
+    update_status_bar()
 
 
 def _did_shutdown(w):
@@ -237,6 +241,7 @@ def _did_shutdown(w):
         running_workers.remove(w)
     except ValueError:
         pass
+    update_status_bar()
     # if not running_workers:
     #     print(f"workers running: {len(running_workers)}/{MAX_WORKERS}")
 
@@ -259,6 +264,31 @@ def get_idle_worker(orchestrator: bool):
     # if orchestrator or len(running_workers) < MAX_WORKERS:
     if sum(1 for w in running_workers if not w.orchestrator) < MAX_WORKERS:
         return spawn(orchestrator)
+
+
+def update_status_bar() -> None:
+    assert_it_runs_on_ui()
+
+    text = worker_status_text(len(running_workers), workload_size())
+    for window in sublime.windows():
+        for view in window.views():
+            if text:
+                view.set_status(STATUS_KEY, text)
+            else:
+                view.erase_status(STATUS_KEY)
+
+
+def worker_status_text(open_threads: int, workload: int) -> str:
+    if open_threads <= 0:
+        return ""
+
+    return f"({workload or '*'}/{open_threads})"
+
+
+def workload_size() -> int:
+    queued = sum(1 for task in queue if not task.future.cancelled())
+    running = sum(1 for worker in running_workers if not worker.idle)
+    return queued + running
 
 
 def spawn(orchestrator: bool):
