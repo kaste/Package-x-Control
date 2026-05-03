@@ -56,7 +56,7 @@ class TopicTask(Generic[T]):
         return f"TopicTask(topic={self.topic}, name={self.name}, status={self.status})"
 
 
-KEEP_ALIVE_TIME = 10.0
+KEEP_ALIVE_TIME = 4.0
 MAX_WORKERS = 4
 STATUS_KEY = "0_pxc"
 STATUS_BLINK_INTERVAL = 500
