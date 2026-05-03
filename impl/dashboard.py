@@ -97,6 +97,10 @@ HELP_TEXT = """
 ; [ctrl+backspace]  delete package     [U]  unpack package
 ; [,]/[.] to move the cursor           [ctrl+r] to search
 """
+FOOTER_HELP_TEXT = (
+    "; * denotes (unmanaged) packages that are available in the "
+    "Package Control Registry"
+)
 RESERVED_PACKAGES = {
     'Binary', 'Default', 'Text', 'User', 'Package Control',
     'Package x Control',
@@ -900,10 +904,11 @@ def render(view: sublime.View, current_state: State, config: Config = DEFAULT_CO
     ))
 
     status_messages: Sequence[str] = current_state.get("status_messages", [])
-    footer_text = ""
+    footer_lines = [FOOTER_HELP_TEXT]
     if status_messages:
         messages = chain.from_iterable([wrap(msg, width=75) for msg in status_messages])
-        footer_text = "\n" + "\n".join(f"; {msg}" for msg in messages)
+        footer_lines.extend(f"; {msg}" for msg in messages)
+    footer_text = "\n" + "\n".join(footer_lines)
 
     final_text = (
         HELP_TEXT

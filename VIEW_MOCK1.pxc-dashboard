@@ -32,6 +32,7 @@
     StatusRulers         1.2.3  / Jan 1 2024
     PyHi
 
+; * denotes (unmanaged) packages that are available in the Package Control Registry
 ; Fetching package data from packagecontrol .io
 ; 5104 packages in total.
 ; Prepared packages in 14.50 seconds.
