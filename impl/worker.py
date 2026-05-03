@@ -214,7 +214,10 @@ def _tick(w, task):
 
     running_topics.discard(task.topic)
     for task in queue:
-        if task.topic not in running_topics:
+        if (
+            task.is_orchestrator == w.orchestrator
+            and task.topic not in running_topics
+        ):
             queue.remove(task)
             if schedule(w, task):
                 break
@@ -264,7 +267,11 @@ def get_idle_worker(orchestrator: bool):
     for w in running_workers:
         if w.idle and w.orchestrator == orchestrator:
             return w
-    # if orchestrator or len(running_workers) < MAX_WORKERS:
+    if orchestrator:
+        # Orchestrators coordinate work and can block waiting for normal workers.
+        # If none is idle, they must get a dedicated thread.
+        return spawn(orchestrator)
+
     if sum(1 for w in running_workers if not w.orchestrator) < MAX_WORKERS:
         return spawn(orchestrator)
 
