@@ -84,7 +84,8 @@ class Config:
 # Default configuration
 DEFAULT_CONFIG = Config()
 HELP_TEXT = """
-; Paste git URL's or URL's from packagecontrol.io or Github et.al. to install.
+; Paste git URL's or package pages from packagecontrol.io,
+; packages.sublimetext.io, Github et.al. to install.
 ; Comment a line to disable a package.  Uncomment to enable it.
 ; [o] open packagecontrol.io
 ;                                      [u]  update package
@@ -268,11 +269,7 @@ class pxc_install_package(sublime_plugin.TextCommand):
             refs = parse_refs_from_user_input(name)
             package_control_entry = lookup_by_encoded_name_in_url(final_name)
         else:
-            final_name = (
-                urllib.parse.unquote(name[35:])
-                if name.startswith("https://packagecontrol.io/packages/")
-                else name
-            )
+            final_name = parse_package_name_from_package_catalog_url(name) or name
             refs = None
             package_control_entry = registered_packages.get(final_name)
 
@@ -572,6 +569,27 @@ HUBS = [
     "https://github.com/", "https://gitlab.com/",
     "https://bitbucket.org/", "https://codeberg.org/"
 ]
+PACKAGE_CATALOG_HOSTS = {"packagecontrol.io", "packages.sublimetext.io"}
+
+
+def parse_package_name_from_package_catalog_url(clip_content: str) -> str:
+    if not clip_content:
+        return ""
+
+    parsed = urllib.parse.urlparse(clip_content.strip())
+    host = parsed.hostname or ""
+    if host.startswith("www."):
+        host = host[4:]
+
+    path_parts = [part for part in parsed.path.split("/") if part]
+    if (
+        parsed.scheme in {"http", "https"}
+        and host in PACKAGE_CATALOG_HOSTS
+        and len(path_parts) == 2
+        and path_parts[0] == "packages"
+    ):
+        return urllib.parse.unquote(path_parts[1])
+    return ""
 
 
 def parse_url_from_user_input(clip_content: str) -> str:
@@ -632,7 +650,7 @@ class pxc_open_packagecontrol_io(sublime_plugin.TextCommand):
         for package in get_selected_packages(view):
             if app_state.state["registered_packages"].get(package):
                 quoted_name = urllib.parse.quote(package)
-                url = f"https://packagecontrol.io/packages/{quoted_name}"
+                url = f"https://packages.sublimetext.io/packages/{quoted_name}"
                 open_in_browser(url)
             else:
                 not_registered_packages.append(package)

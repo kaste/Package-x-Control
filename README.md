@@ -20,14 +20,15 @@ way to install packages; it is not just an UI for the same thing.
 
 ## Usage
 
-Head over to packagecontrol.io and search for a color scheme (really
-anything not crucial or intricate) for testing.
+Head over to packagecontrol.io or packages.sublimetext.io and search for a
+color scheme (really anything not crucial or intricate) for testing.
 
 ```
 https://packagecontrol.io/packages/Solarized%20Color%20Scheme
+https://packages.sublimetext.io/packages/Solarized%20Color%20Scheme
 ```
 
-Copy the URL and paste it into the dashboard anywhere.
+Copy either URL and paste it into the dashboard anywhere.
 <kbd>Ctrl</kbd>+<kbd>Backspace</kbd> it to remove it again. 
 Then go to a package on GitHub[^gh] and copy
 
@@ -54,9 +55,10 @@ This also works for URLs pointing at a pull request.  Or forks.
 
 An ASCII, GitSavvy-like interface to Package Control.
 
-Usually I browse packagecontrol.io or Github or the package control channel
-for its pull requests.  If I see an interesting package, I don't want to
-look that up again.  I have a URL in the browser I can grab.
+Usually I browse packagecontrol.io, packages.sublimetext.io, Github, or the
+package control channel for its pull requests.  If I see an interesting
+package, I don't want to look that up again.  I have a URL in the browser I
+can grab.
 
 So, let's just paste that into the PxC dashboard to install it.
 

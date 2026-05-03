@@ -27,7 +27,8 @@
     PyHi
 
 
-; Paste git URL's or URL's from packagecontrol.io or Github et.al. to install.
+; Paste git URL's or package pages from packagecontrol.io,
+; packages.sublimetext.io, Github et.al. to install.
 ; Comment a line to disable a package.
 ;                                      [u]  update package
 ; [ctrl+backspace]  delete package     [U]  unpack package
