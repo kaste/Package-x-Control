@@ -1,9 +1,13 @@
 import importlib
+from collections import namedtuple
 from unittesting import DeferrableTestCase
 
 from .mockito import unstub
 from .parameterized import parameterized as p
 plugin = importlib.import_module('Package x Control.impl.dashboard')
+
+
+VersionDescription = namedtuple("VersionDescription", "kind specifier date")
 
 
 CHANNEL_PR_DIFF = """diff --git a/repository/m.json b/repository/m.json
@@ -132,3 +136,31 @@ class TestDashboard(DeferrableTestCase):
             plugin.calculate_terse_section_widths(unmanaged_packages)[0],
             actual
         )
+
+
+    def test_format_package_terse_uses_active_date_separator(self):
+        version = VersionDescription("tag", "1.7.7", 1574899200)
+
+        actual = plugin.format_package_terse(
+            {"name": "AutoHotkey", "version": version},
+            20,
+            10,
+            {"disabled_packages": [], "registered_packages": {}}
+        )
+
+        self.assertIn("/ Nov 28 2019", actual)
+
+
+    def test_format_package_terse_uses_disabled_date_separator(self):
+        version = VersionDescription("tag", "1.7.7", 1574899200)
+
+        actual = plugin.format_package_terse(
+            {"name": "AutoHotkey", "version": version},
+            20,
+            10,
+            {"disabled_packages": ["AutoHotkey"], "registered_packages": {}}
+        )
+
+        self.assertIn("Nov 28 2019", actual)
+        self.assertNotIn("/ Nov 28 2019", actual)
+        self.assertNotIn("| Nov 28 2019", actual)

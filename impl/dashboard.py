@@ -97,6 +97,8 @@ HELP_TEXT = """
 ; [ctrl+backspace]  delete package     [U]  unpack package
 ; [,]/[.] to move the cursor           [ctrl+r] to search
 """
+ACTIVE_DATE_SEPARATOR = "/"
+DISABLED_DATE_SEPARATOR = " "
 FOOTER_HELP_TEXT = (
     "; * denotes (unmanaged) packages that are available in the "
     "Package Control Registry"
@@ -1024,7 +1026,7 @@ def format_package_wide(
             version_text = ver.specifier
 
         if ver.date:
-            date_column = f"/ {human_date(ver.date)}"
+            date_column = format_date_column(human_date(ver.date), is_disabled)
 
     version_column = version_text.ljust(version_width)
     actual_version_width = len(version_column)
@@ -1059,7 +1061,7 @@ def format_package_wide(
 
         date_column = ""
         if update_ver.date:
-            date_column = f"/ {human_date(update_ver.date)}"
+            date_column = format_date_column(human_date(update_ver.date))
 
         update_line = config.COLUMN_SPACING.join((
             f"{indent}{name_column}",
@@ -1069,6 +1071,11 @@ def format_package_wide(
         lines.append(update_line)
 
     return "\n".join(lines)
+
+
+def format_date_column(date: str, is_disabled: bool = False) -> str:
+    separator = DISABLED_DATE_SEPARATOR if is_disabled else ACTIVE_DATE_SEPARATOR
+    return f"{separator} {date}" if separator.isspace() else f"{separator} {date}"
 
 
 def render_terse_section(
@@ -1131,7 +1138,7 @@ def format_package_terse(
         if ver.date:
             date_str = human_date(ver.date)
             if date_str:
-                date_text = f"/ {date_str}"
+                date_text = format_date_column(date_str, is_disabled)
 
     # Build line using proper column formatting
     if actual_name_width > name_width:
