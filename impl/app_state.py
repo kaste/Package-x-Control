@@ -59,6 +59,8 @@ class State(TypedDict, total=False):
 
 
 UpdateCallback: TypeAlias = Callable[[State], None]
+StateSetter: TypeAlias = Callable[[State], None]
+RepoSignature: TypeAlias = "tuple[Any, ...]"
 state: State = {
     "installed_packages": [],
     "package_controlled_packages": [],
@@ -69,6 +71,9 @@ state: State = {
     "initial_fetch_of_package_control_io": Future()
 }
 registered_callbacks: set[UpdateCallback] = set()
+unmanaged_package_cache: dict[str, tuple[RepoSignature, PackageInfo]] = {}
+unmanaged_package_futures: dict[str, tuple[RepoSignature, Future[PackageInfo]]] = {}
+linked_git_dir_cache: dict[str, str | None] = {}
 
 
 @on_ui
@@ -106,9 +111,6 @@ def refresh() -> None:
         "refresh_installed_packages:orchestrator", refresh_installed_packages, state, set_state, pm)
     worker.replace_or_add_task(
         "refresh_unmanaged_packages:orchestrator", refresh_unmanaged_packages, state, set_state)
-
-
-StateSetter: TypeAlias = Callable[[State], None]
 
 
 @cooperative
@@ -263,11 +265,9 @@ def refresh_unmanaged_packages(state: State, set_state: StateSetter):
         for p in state.get("unmanaged_packages", [])
     }
     unmanaged_packages = get_unmanaged_package_names()
-    packages = [
-        _p.get(package_name) or default_entry(package_name)
-        for package_name in unmanaged_packages
-    ]
-    set_state({"unmanaged_packages": packages})
+    active_packages = set(unmanaged_packages)
+    packages: list[PackageInfo] = []
+    fetches: dict[Future[PackageInfo], tuple[str, RepoSignature]] = {}
 
     def fetch_package_info(package_name: str) -> PackageInfo:
         return {
@@ -278,17 +278,228 @@ def refresh_unmanaged_packages(state: State, set_state: StateSetter):
             **current_version_of_git_repo(os.path.join(PACKAGES_PATH, package_name))
         }
 
-    for f in as_completed([
-        worker.add_task(package_name, fetch_package_info, package_name)
-        for package_name in unmanaged_packages
-    ]):
+    prune_unmanaged_package_cache(active_packages)
+    for package_name in unmanaged_packages:
+        repo_path = os.path.join(PACKAGES_PATH, package_name)
+        signature = unmanaged_package_signature(repo_path)
+        if cached_package := cached_unmanaged_package(package_name, signature):
+            packages.append(cached_package)
+            continue
+
+        if not signature_needs_git_probe(signature):
+            info = default_entry(package_name)
+            unmanaged_package_cache[package_name] = (signature, info)
+            packages.append(info)
+            continue
+
+        if fetch := matching_unmanaged_package_fetch(package_name, signature):
+            packages.append(_p.get(package_name) or default_entry(package_name))
+            fetches[fetch] = (package_name, signature)
+            continue
+        if cached_package := cached_unmanaged_package(package_name, signature):
+            packages.append(cached_package)
+            continue
+
+        info = _p.get(package_name) or default_entry(package_name)
+        packages.append(info)
+        fetch = worker.add_task(package_name, fetch_package_info, package_name)
+        unmanaged_package_futures[package_name] = (signature, fetch)
+        fetches[fetch] = (package_name, signature)
+
+    set_state({"unmanaged_packages": packages})
+
+    for f in as_completed(fetches):
+        package_name, signature = fetches[f]
         info = f.result()
-        package_name = info["name"]
+        cache_unmanaged_package_info(package_name, signature, f, info)
         for i, p in enumerate(packages):
             if p["name"] == package_name:
                 packages[i] = info
                 break
         set_state({"unmanaged_packages": packages})
+
+
+def prune_unmanaged_package_cache(active_packages: set[str]) -> None:
+    for package_name in list(unmanaged_package_cache):
+        if package_name not in active_packages:
+            unmanaged_package_cache.pop(package_name, None)
+    for package_name in list(unmanaged_package_futures):
+        if package_name not in active_packages:
+            unmanaged_package_futures.pop(package_name, None)
+
+
+def cached_unmanaged_package(
+    package_name: str, signature: RepoSignature
+) -> PackageInfo | None:
+    cached = unmanaged_package_cache.get(package_name)
+    if cached and cached[0] == signature:
+        return cached[1]
+    return None
+
+
+def signature_needs_git_probe(signature: RepoSignature) -> bool:
+    return signature[0] != "plain"
+
+
+def matching_unmanaged_package_fetch(
+    package_name: str, signature: RepoSignature
+) -> Future[PackageInfo] | None:
+    inflight = unmanaged_package_futures.get(package_name)
+    if not inflight or inflight[0] != signature:
+        return None
+
+    future = inflight[1]
+    if future.done():
+        info = future.result()
+        unmanaged_package_cache[package_name] = (signature, info)
+        unmanaged_package_futures.pop(package_name, None)
+        return None
+    return future
+
+
+def cache_unmanaged_package_info(
+    package_name: str,
+    signature: RepoSignature,
+    future: Future[PackageInfo],
+    info: PackageInfo,
+) -> None:
+    inflight = unmanaged_package_futures.get(package_name)
+    if inflight and inflight == (signature, future):
+        unmanaged_package_futures.pop(package_name, None)
+    unmanaged_package_cache[package_name] = (signature, info)
+
+
+def unmanaged_package_signature(repo_path: str) -> RepoSignature:
+    git_dir = resolve_git_dir(repo_path)
+    if git_dir:
+        return git_dir_signature(git_dir)
+
+    is_linked = os.path.islink(repo_path) or isjunction(repo_path)
+    if is_linked and (git_dir := discover_linked_git_dir(repo_path)):
+        return git_dir_signature(git_dir)
+
+    return (
+        "linked" if is_linked else "plain",
+        os.path.normcase(os.path.realpath(repo_path)),
+        file_signature(repo_path),
+        file_signature(os.path.join(repo_path, ".git")),
+    )
+
+
+def git_dir_signature(git_dir: str) -> RepoSignature:
+    common_dir = resolve_common_git_dir(git_dir)
+    head_path = os.path.join(git_dir, "HEAD")
+    head = read_text_file(head_path)
+    parts: list[Any] = [
+        os.path.normcase(os.path.realpath(git_dir)),
+        os.path.normcase(os.path.realpath(common_dir)),
+        file_signature(head_path),
+        head,
+        file_signature(os.path.join(common_dir, "packed-refs")),
+        directory_signature(os.path.join(common_dir, "refs", "heads")),
+        directory_signature(os.path.join(common_dir, "refs", "tags")),
+    ]
+    if head.startswith("ref: "):
+        ref_path = os.path.join(common_dir, head[5:].strip().replace("/", os.sep))
+        parts.extend((file_signature(ref_path), read_text_file(ref_path)))
+    return ("git", tuple(parts))
+
+
+def discover_linked_git_dir(repo_path: str) -> str | None:
+    cache_key = os.path.normcase(os.path.realpath(repo_path))
+    if cache_key in linked_git_dir_cache:
+        return linked_git_dir_cache[cache_key]
+
+    git = GitCallable(repo_path)
+    try:
+        git_dir = git("rev-parse", "--git-dir")
+    except Exception:
+        git_dir = None
+    else:
+        if not os.path.isabs(git_dir):
+            git_dir = os.path.join(repo_path, git_dir)
+        git_dir = os.path.normpath(git_dir)
+
+    linked_git_dir_cache[cache_key] = git_dir
+    return git_dir
+
+
+def resolve_git_dir(repo_path: str) -> str | None:
+    dot_git = os.path.join(repo_path, ".git")
+    if os.path.isdir(dot_git):
+        return dot_git
+    if not os.path.isfile(dot_git):
+        return None
+
+    gitdir_prefix = "gitdir:"
+    content = read_text_file(dot_git)
+    if not content.lower().startswith(gitdir_prefix):
+        return None
+
+    git_dir = content[len(gitdir_prefix):].strip()
+    if not os.path.isabs(git_dir):
+        git_dir = os.path.join(repo_path, git_dir)
+    return os.path.normpath(git_dir)
+
+
+def resolve_common_git_dir(git_dir: str) -> str:
+    common_dir_path = os.path.join(git_dir, "commondir")
+    common_dir = read_text_file(common_dir_path)
+    if not common_dir:
+        return git_dir
+    if not os.path.isabs(common_dir):
+        common_dir = os.path.join(git_dir, common_dir)
+    return os.path.normpath(common_dir)
+
+
+def file_signature(path: str) -> tuple[str, int, int] | None:
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return None
+    return (os.path.normcase(os.path.realpath(path)), stat.st_mtime_ns, stat.st_size)
+
+
+def directory_signature(path: str) -> tuple[tuple[str, int, int], ...] | None:
+    try:
+        os.stat(path)
+    except OSError:
+        return None
+
+    signatures: list[tuple[str, int, int]] = []
+    collect_directory_signatures(path, "", signatures)
+    return tuple(sorted(signatures))
+
+
+def collect_directory_signatures(
+    path: str, relpath: str, signatures: list[tuple[str, int, int]]
+) -> None:
+    try:
+        stat = os.stat(path)
+        entries = os.scandir(path)
+    except OSError:
+        return
+
+    signatures.append((relpath, stat.st_mtime_ns, stat.st_size))
+    with entries:
+        for entry in entries:
+            child_relpath = os.path.join(relpath, entry.name)
+            if entry.is_dir(follow_symlinks=False):
+                collect_directory_signatures(entry.path, child_relpath, signatures)
+                continue
+            try:
+                entry_stat = entry.stat(follow_symlinks=False)
+            except OSError:
+                continue
+            signatures.append((child_relpath, entry_stat.st_mtime_ns, entry_stat.st_size))
+
+
+def read_text_file(path: str) -> str:
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
 
 
 def current_version_of_git_repo(repo_path: str) -> dict:
