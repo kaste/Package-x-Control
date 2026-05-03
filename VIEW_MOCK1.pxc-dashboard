@@ -1,4 +1,10 @@
 
+; Paste git URL's or package pages from packagecontrol.io,
+; packages.sublimetext.io, Github et.al. to install.
+; Comment a line to disable a package.  Uncomment to enable it.
+; [o] open packagecontrol.io
+;                                      [u]  update package
+; [ctrl+backspace]  delete package     [U]  unpack package
 
 === INSTALLED PACKAGES
 
@@ -25,13 +31,6 @@
    <Find-Addon        5fd8e3de  / Jan 1 2024
     StatusRulers         1.2.3  / Jan 1 2024
     PyHi
-
-
-; Paste git URL's or package pages from packagecontrol.io,
-; packages.sublimetext.io, Github et.al. to install.
-; Comment a line to disable a package.
-;                                      [u]  update package
-; [ctrl+backspace]  delete package     [U]  unpack package
 
 ; Fetching package data from packagecontrol .io
 ; 5104 packages in total.

@@ -95,6 +95,7 @@ HELP_TEXT = """
 ; [o] open packagecontrol.io
 ;                                      [u]  update package
 ; [ctrl+backspace]  delete package     [U]  unpack package
+; [,]/[.] to move the cursor           [ctrl+r] to search
 """
 RESERVED_PACKAGES = {
     'Binary', 'Default', 'Text', 'User', 'Package Control',
@@ -904,10 +905,10 @@ def render(view: sublime.View, current_state: State, config: Config = DEFAULT_CO
         footer_text = "\n" + "\n".join(f"; {msg}" for msg in messages)
 
     final_text = (
-        "\n\n"
+        HELP_TEXT
+        + "\n"
         + "\n\n\n".join(sections)
-        + "\n\n"
-        + HELP_TEXT
+        + "\n"
         + footer_text
         + "\n"
     )
